@@ -23,9 +23,26 @@ import axios from 'axios';
 // CONFIGURAÇÃO DA API
 // ============================================================
 
-// URL base (lê do .env ou usa fallback local)
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5000/api';
+// URL base (lê do .env ou usa fallback local em desenvolvimento)
+const envApiBaseUrl = typeof import.meta.env.VITE_API_BASE_URL === 'string'
+  ? import.meta.env.VITE_API_BASE_URL.trim()
+  : '';
+
+const rawApiBaseUrl = envApiBaseUrl || (import.meta.env.DEV ? 'http://127.0.0.1:5000/api' : null);
+
+if (import.meta.env.PROD && !rawApiBaseUrl) {
+  throw new Error(
+    'VITE_API_BASE_URL não definido em produção. Defina-o no painel da Vercel para apontar para o backend, por exemplo: https://bolha-backend.onrender.com/api'
+  );
+}
+
+let normalizedApiBaseUrl = rawApiBaseUrl?.trim() || '';
+if (!normalizedApiBaseUrl.endsWith('/api')) {
+  normalizedApiBaseUrl = normalizedApiBaseUrl.replace(/\/+$|\s+$/g, '');
+  normalizedApiBaseUrl += '/api';
+}
+
+export const API_BASE_URL = normalizedApiBaseUrl;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -72,12 +89,19 @@ api.interceptors.response.use(
   // Erro: tenta refresh token se for 401
   async (error) => {
     const originalRequest = error.config;
+    const refreshEndpoint = '/auth/refresh-token';
+    const originalRequestUrl = String(originalRequest?.url || '');
+    const isRefreshRequest = originalRequestUrl.includes(refreshEndpoint);
 
     // Só tenta refresh se:
     // - Erro for 401 (não autorizado)
-    // - Não for a própria requisição de refresh (evita loop)
+    // - Não for a requisição de refresh (evita loop)
     // - Ainda não tentou refresh nesta requisição (_retry)
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (
+      error.response?.status === 401 &&
+      !isRefreshRequest &&
+      !originalRequest._retry
+    ) {
       // Se já está refrescando, entra na fila
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
@@ -96,7 +120,7 @@ api.interceptors.response.use(
 
       try {
         // Tenta renovar o token
-        await api.post('/auth/refresh-token');
+        await api.post(refreshEndpoint);
 
         // Sucesso: resolve a fila e reexecuta a requisição
         processQueue(null);
