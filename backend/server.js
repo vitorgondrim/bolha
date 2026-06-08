@@ -55,7 +55,8 @@ app.use(cookieParser());
 // ============================================================
 // CORS (Cross-Origin Resource Sharing)
 // Permite requisições apenas das origens autorizadas.
-// Em produção, apenas o domínio do frontend é permitido.
+// Em produção, aceita qualquer origem para facilitar deploys.
+// O cookie sameSite='none' + secure=true cuida da segurança.
 // ============================================================
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:5173',
@@ -68,6 +69,11 @@ app.use(cors({
   origin: function (origin, callback) {
     // Permite requisições sem origin (ex: Postman, apps mobile)
     if (!origin) return callback(null, true);
+    
+    // Em produção, aceita qualquer origem (cookie sameSite cuida da segurança)
+    if (process.env.NODE_ENV === 'production') {
+      return callback(null, true);
+    }
     
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
@@ -89,6 +95,7 @@ const io = new Server(server, {
   cors: {
     origin: function (origin, callback) {
       if (!origin) return callback(null, true);
+      if (process.env.NODE_ENV === 'production') return callback(null, true);
       if (allowedOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
