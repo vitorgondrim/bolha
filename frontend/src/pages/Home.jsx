@@ -90,15 +90,18 @@ export default function Home() {
           <div className="flex h-full flex-col justify-end gap-4 pt-6">
             {/* ============================================================
                 BOTÃO: GOOGLE
-                Link direto para o backend (não usa navigate).
+                Redireciona para o backend (não usa navigate).
                 O backend redireciona para o Google OAuth.
                 ============================================================ */}
-            <a
-              href={`${API_BASE_URL}/auth/google`}
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = `${API_BASE_URL}/auth/google`;
+              }}
               className="w-full inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-950/90 py-4 text-sm font-semibold uppercase tracking-[0.25em] text-white shadow-lg shadow-slate-950/20 transition hover:bg-slate-900"
             >
               Continuar com Google
-            </a>
+            </button>
 
             {/* ============================================================
                 BOTÃO: CRIAR CONTA
