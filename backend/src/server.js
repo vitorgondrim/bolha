@@ -57,7 +57,9 @@ const allowedOrigins = new Set([
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
   'https://bolha-frontend.vercel.app',
-  'https://bolha-frontend.vercel.app/'
+  'https://bolha-frontend.vercel.app/',
+  'https://bolha-omega.vercel.app',
+  'https://bolha-omega.vercel.app/'
 ]);
 
 const corsOptions = {
@@ -89,16 +91,16 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "blob:", "https://i.imgur.com", "https://media.giphy.com", "https://*.giphy.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https://i.imgur.com", "https://media.giphy.com", "https://*.giphy.com", "https://*.googleusercontent.com"],
       mediaSrc: ["'self'", "data:", "blob:"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       fontSrc: ["'self'"],
       scriptSrc: ["'self'"],
-      connectSrc: ["'self'", "ws:", "wss:"],
+      connectSrc: ["'self'", "ws:", "wss:", "https://oauth2.googleapis.com", "https://accounts.google.com"],
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
-      formAction: ["'self'"],
+      formAction: ["'self'", "https://accounts.google.com"],
     }
   },
 }));
@@ -117,6 +119,8 @@ const globalLimiter = rateLimit({
   message: { success: false, message: 'Muitas requisições vindas deste IP. Tente novamente em 15 minutos.' },
   standardHeaders: true,
   legacyHeaders: false,
+  // Exclui rotas de autenticação do Google do rate limiter global
+  skip: (req) => req.path.startsWith('/auth/google'),
 });
 app.use('/api/', globalLimiter);
 
