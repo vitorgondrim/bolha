@@ -64,11 +64,8 @@ const allowedOrigins = new Set([
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Sênior: Permite requisições sem origem apenas fora de produção (ex: Postman em desenvolvimento)
+    // Permite requisições sem origem (navegações diretas, como redirecionamento OAuth)
     if (!origin) {
-      if (process.env.NODE_ENV === 'production') {
-        return callback(new Error('Acesso direto não permitido em ambiente de produção (CORS)'));
-      }
       return callback(null, true);
     }
     
