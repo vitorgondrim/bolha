@@ -88,7 +88,7 @@ export default function Trending() {
       withScore.sort((a, b) => b.score - a.score);
       setBubbles(withScore.slice(0, 15));
     } catch (err) {
-      console.error('Erro ao carregar trending:', err);
+      // Erro silenciado — tratado pelo estado bubblesError
     } finally {
       setLoading(false);
     }

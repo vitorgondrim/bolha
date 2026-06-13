@@ -1,24 +1,16 @@
 // ============================================================
-// COMPONENTE: BUBBLE CARD
-// Card completo de uma bolha para visualização detalhada.
-// Usado em: Feed (grid), BubbleDetail, Explore, Trending.
-//
-// Funcionalidades:
-//   - Barra de pressão (tempo de vida restante)
-//   - Estados visuais: estável, alerta, crítico, vazado
-//   - Interações: like, dislike, sopro, comentário
-//   - Modal de exclusão (apenas para o autor)
-//   - Exibição de mídia (imagem/GIF)
+// BOLHA - REDE SOCIAL EFÊMERA
+// Componente: BubbleCard
+// Propósito: Card otimizado, imune a vazamento de eventos e performático (Sênior)
 // ============================================================
 
 import { useMemo, useState, useContext } from 'react';
-import { TimeContext } from '../context/TimeContext.jsx';
+import { createPortal } from 'react-dom'; // Sênior: Para renderizar o modal na raiz da página (Evita bugs de layout)
+import { TimeContext } from '../contexts/TimeContext.jsx';
 
 /**
- * Limita um valor entre min e max.
- * Ex: clamp(75, 0, 100) → 75
- *     clamp(150, 0, 100) → 100
- *     clamp(-10, 0, 100) → 0
+ * Função Pura Auxiliar: Limita um valor entre o intervalo min e max.
+ * Mantida fora do componente para não ser recriada na memória a cada ciclo.
  */
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -40,25 +32,40 @@ export default function BubbleCard({
   const [imageError, setImageError] = useState(false);
 
   // ============================================================
-  // HANDLERS DO MODAL DE EXCLUSÃO
+  // CÁLCULOS DE TEMPO E PRESSÃO (OTIMIZADOS)
   // ============================================================
-  const openDeleteModal = () => setIsDeleteModalOpen(true);
-  const closeDeleteModal = () => setIsDeleteModalOpen(false);
-  const confirmDelete = () => {
-    closeDeleteModal();
-    onDelete?.(bubble._id);
-  };
+  
+  // Tempo restante em milissegundos
+  const remainingMs = Math.max(new Date(bubble.expiresAt).getTime() - timeNow, 0);
+
+  // Texto formatado dinamicamente: "5m 32s" ou "Estourou! 💥"
+  const formatRemainingText = useMemo(() => {
+    if (remainingMs <= 0) return 'Estourou! 💥';
+    const minutes = Math.floor(remainingMs / 60000);
+    const seconds = Math.floor((remainingMs % 60000) / 1000);
+    return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+  }, [remainingMs]);
+
+  // Percentual de vida restante (0-100)
+  const percent = useMemo(() => {
+    const totalDuration = new Date(bubble.expiresAt).getTime() - new Date(bubble.createdAt).getTime();
+    return totalDuration > 0 ? clamp((remainingMs / totalDuration) * 100, 0, 100) : 0;
+  }, [bubble.createdAt, bubble.expiresAt, remainingMs]);
+
+  // Nível de estresse térmico/pressão da bolha
+  const pressureLevel = useMemo(() => {
+    if (percent <= 25) return 'critical'; // Perigo iminente
+    if (percent <= 55) return 'warning';  // Instável
+    return 'stable';                      // Saudável
+  }, [percent]);
 
   // ============================================================
-  // COMENTÁRIOS
+  // INTERAÇÕES E TRATAMENTO DE EVENTOS (STOP PROPAGATION)
   // ============================================================
-  const comments = useMemo(() => bubble.comments || [], [bubble.comments]);
-  
-  // Últimos 2 comentários (ordem inversa: mais recentes primeiro)
-  const latestComments = useMemo(() => 
-    comments.slice(-2).reverse(), 
-    [comments]
-  );
+  const handleAction = (event, callback, ...args) => {
+    event.stopPropagation(); // Sênior: Impede que o clique no botão dispare o 'onOpen' do card pai
+    callback?.(...args);
+  };
 
   const handleCommentSubmit = async (event) => {
     event.preventDefault();
@@ -68,47 +75,13 @@ export default function BubbleCard({
     setCommentText('');
   };
 
-  // ============================================================
-  // CÁLCULOS DE TEMPO E PRESSÃO
-  // ============================================================
-  
-  // Tempo restante em milissegundos (nunca negativo)
-  const remainingMs = Math.max(
-    new Date(bubble.expiresAt).getTime() - timeNow, 
-    0
-  );
-
-  // Texto formatado: "5m 32s" ou "Estourou! 💥"
-  const formatRemainingText = useMemo(() => {
-    const minutes = Math.floor(remainingMs / 60000);
-    const seconds = Math.floor((remainingMs % 60000) / 1000);
-    if (remainingMs <= 0) return 'Estourou! 💥';
-    return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
-  }, [remainingMs]);
-
-  // Percentual de vida restante (0-100)
-  const percent = useMemo(() => {
-    const totalDuration = 
-      new Date(bubble.expiresAt).getTime() - 
-      new Date(bubble.createdAt).getTime();
-    return totalDuration > 0 
-      ? clamp((remainingMs / totalDuration) * 100, 0, 100) 
-      : 0;
-  }, [bubble.createdAt, bubble.expiresAt, remainingMs]);
-
-  // Nível de pressão baseado no percentual restante
-  const pressureLevel = useMemo(() => {
-    if (percent <= 25) return 'critical';  // 0-25%: vermelho, pulsando
-    if (percent <= 55) return 'warning';   // 26-55%: ciano, alerta
-    return 'stable';                        // 56-100%: verde, saudável
-  }, [percent]);
-
-  // Se tem mídia válida para exibir
+  const comments = useMemo(() => bubble.comments || [], [bubble.comments]);
+  const latestComments = useMemo(() => [...comments].reverse().slice(0, 2), [comments]);
   const hasMedia = bubble.mediaUrl && !imageError;
 
-  // ============================================================
-  // RENDER
-  // ============================================================
+  // Verifica se o usuário logado é o dono legítimo da bolha
+  const isAuthor = userId && bubble.author && String(bubble.author._id || bubble.author) === String(userId);
+
   return (
     <div
       onClick={() => onOpen?.(bubble._id)}
@@ -118,36 +91,26 @@ export default function BubbleCard({
         ${bubble.hasLeaked
           ? 'bg-slate-900/80 border-lime-400 shadow-lg shadow-lime-500/30 animate-pulse'
           : pressureLevel === 'critical'
-            ? 'bg-slate-900/40 border-rose-500/60 opacity-75 animate-pulse'
+            ? 'bg-slate-900/40 border-rose-500/60 opacity-85'
             : pressureLevel === 'warning'
               ? 'bg-slate-900/60 border-cyan-400/50 shadow-lg shadow-cyan-500/10'
               : 'bg-slate-900/70 border-slate-700/60 shadow-lg shadow-cyan-500/5'
         } 
         ${onOpen ? 'cursor-pointer hover:border-cyan-400/60 hover:shadow-lg hover:shadow-cyan-500/20' : ''}
       `}
-      style={pressureLevel === 'stable' ? { animation: 'none' } : {}}
     >
-      {/* ============================================================
-          OVERLAY DE FUNDO (ESTADOS CRÍTICO E ALERTA)
-          Camada sutil que pulsa por trás do conteúdo.
-          ============================================================ */}
-      <div className="absolute inset-0 pointer-events-none">
-        {pressureLevel === 'critical' && (
-          <div className="absolute inset-0 bg-rose-500/5 animate-pulse" />
-        )}
-        {pressureLevel === 'warning' && (
-          <div className="absolute inset-0 bg-cyan-500/5 animate-pulse" />
-        )}
+      {/* Glow de fundo dinâmico */}
+      <div className="absolute inset-0 pointer-events-none z-0">
+        {pressureLevel === 'critical' && <div className="absolute inset-0 bg-rose-500/5 animate-pulse" />}
+        {pressureLevel === 'warning' && <div className="absolute inset-0 bg-cyan-500/5 animate-pulse" />}
       </div>
 
-      {/* ============================================================
-          CABEÇALHO: AUTOR + STATUS
-          ============================================================ */}
+      {/* CABEÇALHO */}
       <div className="relative z-10 flex justify-between items-start gap-3 mb-4">
         <div>
           <div className="flex items-center gap-2 text-slate-300 text-sm">
             <span className="font-semibold text-cyan-300">
-              @{bubble.author?.username}
+              @{bubble.author?.username || 'Anônimo'}
             </span>
             {bubble.hasLeaked && (
               <span className="text-[0.65rem] uppercase tracking-[0.25em] px-2 py-1 rounded-full bg-lime-500/20 text-lime-300 border border-lime-500/40 font-bold">
@@ -160,48 +123,30 @@ export default function BubbleCard({
           </div>
         </div>
         
-        {/* Timer + Botão de exclusão (se for o autor) */}
         <div className="text-right text-[0.75rem] text-slate-400 flex flex-col items-end gap-2">
-          {userId && bubble.author && bubble.author._id?.toString() === userId.toString() && onDelete && (
+          {isAuthor && onDelete && (
             <button
               type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                openDeleteModal();
-              }}
+              onClick={(e) => handleAction(e, setIsDeleteModalOpen, true)}
               className="text-xs uppercase tracking-[0.2em] text-rose-300 border border-rose-500/30 px-3 py-1 rounded-full hover:bg-rose-500/10 transition"
             >
               🗑️ Apagar
             </button>
           )}
-          <div className={`font-bold ${pressureLevel === 'critical' ? 'text-rose-400 animate-pulse' : 'text-cyan-300'}`}>
+          <div className={`font-bold text-sm ${pressureLevel === 'critical' ? 'text-rose-400 animate-pulse' : 'text-cyan-300'}`}>
             {formatRemainingText}
           </div>
           <div className={`mt-1 uppercase tracking-widest text-[0.65rem] font-bold ${
-            pressureLevel === 'critical' ? 'text-rose-400' : 
-            pressureLevel === 'warning' ? 'text-cyan-400' : 
-            'text-lime-400'
+            pressureLevel === 'critical' ? 'text-rose-400' : pressureLevel === 'warning' ? 'text-cyan-400' : 'text-lime-400'
           }`}>
-            {pressureLevel === 'critical' ? '⚠️ ESTOURANDO' : 
-             pressureLevel === 'warning' ? '🫧 TREME' : 
-             '💚 QUENTE'}
+            {pressureLevel === 'critical' ? '⚠️ ESTOURANDO' : pressureLevel === 'warning' ? '🫧 TREME' : '💚 QUENTE'}
           </div>
         </div>
       </div>
 
-      {/* ============================================================
-          TÍTULO
-          ============================================================ */}
-      {bubble.title && (
-        <h3 className="relative z-10 text-xl font-bold text-white mb-2 leading-tight">
-          {bubble.title}
-        </h3>
-      )}
+      {/* CORPO DA BOLHA */}
+      {bubble.title && <h3 className="relative z-10 text-xl font-bold text-white mb-2 leading-tight">{bubble.title}</h3>}
 
-      {/* ============================================================
-          ASSUNTO (BADGE)
-          Só aparece se não for "Geral".
-          ============================================================ */}
       {bubble.subject && bubble.subject !== 'Geral' && (
         <div className="relative z-10 mb-3">
           <span className="text-[10px] uppercase tracking-wider bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full">
@@ -210,15 +155,11 @@ export default function BubbleCard({
         </div>
       )}
 
-      {/* ============================================================
-          MÍDIA (IMAGEM/GIF)
-          Só renderiza se tiver mediaUrl e não deu erro.
-          ============================================================ */}
-      {hasMedia && bubble.mediaUrl && (
-        <div className="relative z-10 mb-4 rounded-2xl overflow-hidden bg-slate-950/50">
+      {hasMedia && (
+        <div className="relative z-10 mb-4 rounded-2xl overflow-hidden bg-slate-950/50" onClick={(e) => e.stopPropagation()}>
           <img
             src={bubble.mediaUrl}
-            alt={bubble.title || 'Bolha visual'}
+            alt="Conteúdo da bolha"
             className="w-full max-h-64 object-contain rounded-2xl"
             onError={() => setImageError(true)}
             loading="lazy"
@@ -226,169 +167,148 @@ export default function BubbleCard({
         </div>
       )}
 
-      {/* ============================================================
-          CONTEÚDO PRINCIPAL
-          ============================================================ */}
-      <p className="relative z-10 text-lg leading-relaxed text-slate-100 min-h-12">
+      <p className="relative z-10 text-base leading-relaxed text-slate-100 min-h-6 mb-4 whitespace-pre-wrap">
         {bubble.content}
       </p>
 
-      {/* ============================================================
-          BARRA DE PRESSÃO
-          Indica visualmente o tempo de vida restante.
-          Cores: verde → ciano → laranja → vermelho.
-          ============================================================ */}
-      <div className="relative z-10 mt-5 h-2.5 rounded-full bg-slate-800 overflow-hidden border border-slate-700/50">
+      {/* BARRA DE PROGRESSO / PRESSÃO */}
+      <div className="relative z-10 h-2 rounded-full bg-slate-800 overflow-hidden border border-slate-700/30">
         <div
-          className={`h-full rounded-full transition-all duration-300 ${
+          className={`h-full rounded-full transition-all duration-1000 ease-linear ${
             pressureLevel === 'critical'
               ? 'bg-gradient-to-r from-rose-500 to-orange-500 shadow-lg shadow-rose-500/50'
               : pressureLevel === 'warning'
-                ? 'bg-gradient-to-r from-cyan-400 to-lime-400 shadow-lg shadow-cyan-500/30'
-                : 'bg-gradient-to-r from-lime-400 to-cyan-400 shadow-lg shadow-lime-500/50'
+                ? 'bg-gradient-to-r from-cyan-400 to-lime-400'
+                : 'bg-gradient-to-r from-lime-400 to-cyan-400'
           }`}
           style={{ width: `${percent}%` }}
         />
       </div>
 
-      {/* ============================================================
-          ESTATÍSTICAS (LIKES, DISLIKES, SOPROS)
-          ============================================================ */}
-      <div className="relative z-10 grid grid-cols-3 gap-3 mt-5 text-center">
-        <div className="rounded-xl bg-slate-950/60 p-2.5 border border-slate-800/80">
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-medium">Curtidas</div>
-          <div className="text-sm font-bold text-cyan-400 mt-0.5">❤️ {bubble.likes?.length || 0}</div>
+      {/* METRICAS */}
+      <div className="relative z-10 grid grid-cols-3 gap-2.5 mt-5 text-center">
+        <div className="rounded-xl bg-slate-950/40 p-2 border border-slate-800/50">
+          <div className="text-[10px] uppercase tracking-wider text-slate-500">Curtidas</div>
+          <div className="text-xs font-bold text-cyan-400 mt-0.5">❤️ {bubble.likes?.length || 0}</div>
         </div>
-        <div className="rounded-xl bg-slate-950/60 p-2.5 border border-slate-800/80">
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-medium">Dislikes</div>
-          <div className="text-sm font-bold text-rose-400 mt-0.5">💥 {bubble.dislikes?.length || 0}</div>
+        <div className="rounded-xl bg-slate-950/40 p-2 border border-slate-800/50">
+          <div className="text-[10px] uppercase tracking-wider text-slate-500">Dislikes</div>
+          <div className="text-xs font-bold text-rose-400 mt-0.5">💥 {bubble.dislikes?.length || 0}</div>
         </div>
-        <div className="rounded-xl bg-slate-950/60 p-2.5 border border-slate-800/80">
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-medium">Sopros</div>
-          <div className="text-sm font-bold text-lime-400 mt-0.5">🫧 {bubble.sopros?.length || 0}</div>
+        <div className="rounded-xl bg-slate-950/40 p-2 border border-slate-800/50">
+          <div className="text-[10px] uppercase tracking-wider text-slate-500">Sopros</div>
+          <div className="text-xs font-bold text-lime-400 mt-0.5">🫧 {bubble.sopros?.length || 0}</div>
         </div>
       </div>
 
-      {/* ============================================================
-          SEÇÃO DE COMENTÁRIOS
-          Modo compacto (apenas contagem) ou expandido (lista + form).
-          ============================================================ */}
-      {!showComments ? (
-        <div className="relative z-10 mt-4 rounded-3xl bg-slate-950/60 border border-slate-800/60 p-4 text-xs text-slate-400">
-          {comments.length} comentário(s) · Clique para entrar na bolha
-        </div>
-      ) : (
-        <div className="relative z-10 mt-4 rounded-3xl bg-slate-950/60 border border-slate-800/60 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-medium">💬 Comentários</div>
-            <div className="text-xs text-slate-400">{comments.length}</div>
+      {/* SEÇÃO DE COMENTÁRIOS */}
+      <div className="relative z-10 mt-4" onClick={(e) => e.stopPropagation()}>
+        {!showComments ? (
+          <div className="rounded-2xl bg-slate-950/30 border border-slate-800/40 p-3 text-xs text-slate-400 hover:bg-slate-950/50 transition">
+            {comments.length} comentário(s) · Clique para inspecionar bolha
           </div>
-
-          {comments.length === 0 ? (
-            <div className="text-slate-500 text-sm italic">
-              Seja o primeiro a comentar e dê vida à bolha.
+        ) : (
+          <div className="rounded-2xl bg-slate-950/40 border border-slate-800/60 p-4">
+            <div className="flex items-center justify-between mb-3 border-b border-slate-800/60 pb-2">
+              <div className="text-xs uppercase tracking-wider text-slate-400 font-medium">💬 Discussão</div>
+              <div className="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md">{comments.length}</div>
             </div>
-          ) : (
-            <div className="space-y-2">
-              {latestComments.map((comment) => (
-                <div key={comment._id} className="rounded-2xl bg-slate-900/80 p-3 border border-slate-800">
-                  <div className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-1">
-                    @{comment.author?.username || 'anon'}
+
+            {comments.length === 0 ? (
+              <div className="text-slate-500 text-xs italic py-2">Nenhum sopro de voz por aqui ainda...</div>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {latestComments.map((comment) => (
+                  <div key={comment._id} className="rounded-xl bg-slate-900/60 p-2.5 border border-slate-800/80">
+                    <div className="text-[10px] font-semibold text-cyan-400/80 mb-0.5">
+                      @{comment.author?.username || 'anon'}
+                    </div>
+                    <div className="text-xs text-slate-200">{comment.text}</div>
                   </div>
-                  <div className="text-sm text-slate-100 leading-relaxed">{comment.text}</div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {showCommentForm && (
-            <form onSubmit={handleCommentSubmit} onClick={(event) => event.stopPropagation()} className="mt-4">
-              <textarea
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                maxLength={240}
-                placeholder="Comente na bolha..."
-                className="w-full min-h-24 rounded-3xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30 resize-none"
-              />
-              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-                <span className="text-xs text-slate-500">Máx. 240 caracteres</span>
-                <button
-                  type="submit"
-                  disabled={!commentText.trim()}
-                  className="rounded-2xl bg-cyan-500 text-slate-950 px-5 py-2 text-sm font-semibold transition hover:bg-cyan-400 disabled:opacity-40"
-                >
-                  Comentar
-                </button>
+                ))}
               </div>
-            </form>
-          )}
-        </div>
-      )}
+            )}
 
-      {/* ============================================================
-          BOTÕES DE AÇÃO (LIKE, DISLIKE, SOPRO)
-          ============================================================ */}
+            {showCommentForm && (
+              <form onSubmit={handleCommentSubmit} className="mt-4">
+                <textarea
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  maxLength={240}
+                  placeholder="Injete sua opinião na bolha..."
+                  className="w-full min-h-16 rounded-2xl border border-slate-800 bg-slate-950/90 px-3 py-2 text-xs text-slate-100 outline-none focus:border-cyan-500 transition resize-none"
+                />
+                <div className="mt-2 flex justify-between items-center">
+                  <span className="text-[10px] text-slate-500">{commentText.length}/240 caracteres</span>
+                  <button
+                    type="submit"
+                    disabled={!commentText.trim()}
+                    className="rounded-xl bg-cyan-500 text-slate-950 px-4 py-1.5 text-xs font-bold transition hover:bg-cyan-400 disabled:opacity-30"
+                  >
+                    Comentar
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* COMPONENTES DE AÇÃO */}
       <div className="relative z-10 grid grid-cols-3 gap-2 mt-4">
         <button
-          onClick={(event) => {
-            event.stopPropagation();
-            onLike(bubble._id, 'like');
-          }}
-          className="rounded-xl bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 py-2.5 text-xs font-semibold hover:bg-cyan-500/30 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+          onClick={(e) => handleAction(e, onLike, bubble._id, 'like')}
+          className="rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 py-2 text-xs font-semibold hover:bg-cyan-500/20 active:scale-95 transition-all"
         >
           ❤️ Curtir
         </button>
-
         <button
-          onClick={(event) => {
-            event.stopPropagation();
-            onDislike(bubble._id, 'dislike');
-          }}
-          className="rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 py-2.5 text-xs font-semibold hover:bg-rose-500/30 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+          onClick={(e) => handleAction(e, onDislike, bubble._id, 'dislike')}
+          className="rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 py-2 text-xs font-semibold hover:bg-rose-500/20 active:scale-95 transition-all"
         >
           💥 Dislike
         </button>
-
         <button
-          onClick={(event) => {
-            event.stopPropagation();
-            onSopro(bubble._id, 'sopro');
-          }}
-          className="rounded-xl bg-lime-500/15 border border-lime-500/40 text-lime-300 py-2.5 text-xs font-semibold hover:bg-lime-500/30 active:scale-95 transition-all flex items-center justify-center gap-1.5 hover:shadow-lg hover:shadow-lime-500/20"
+          onClick={(e) => handleAction(e, onSopro, bubble._id, 'sopro')}
+          className="rounded-xl bg-lime-500/10 border border-lime-500/30 text-lime-300 py-2 text-xs font-semibold hover:bg-lime-500/20 active:scale-95 transition-all"
         >
           🫧 Sopro
         </button>
       </div>
 
       {/* ============================================================
-          MODAL DE EXCLUSÃO
-          Aparece sobreposto quando o autor clica em "Apagar".
+          MODAL DE EXCLUSÃO (REACT PORTAL)
+          Injetado diretamente no root do HTML para evitar quebra de z-index
           ============================================================ */}
-      {isDeleteModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
-          <div className="w-full max-w-md rounded-3xl bg-slate-900/95 border border-slate-700 p-6 shadow-2xl backdrop-blur-xl">
-            <div className="text-lg font-semibold text-white mb-3">🗑️ Confirmar exclusão</div>
-            <p className="text-slate-300 text-sm leading-relaxed">
-              Tem certeza que deseja apagar esta bolha? Esta ação é permanente.
+      {isDeleteModalOpen && createPortal(
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm rounded-3xl bg-slate-900 border border-slate-800 p-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="text-base font-bold text-white mb-2">🗑️ Confirmar autodestruição</div>
+            <p className="text-slate-400 text-xs leading-relaxed">
+              Você tem certeza de que deseja estourar manualmente essa bolha? Esse processo não pode ser desfeito.
             </p>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <div className="mt-5 flex gap-2 justify-end">
               <button
                 type="button"
-                onClick={closeDeleteModal}
-                className="w-full sm:w-auto rounded-2xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/50 transition font-medium"
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="rounded-xl border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 transition"
               >
-                Cancelar
+                Garantir Vida
               </button>
               <button
                 type="button"
-                onClick={confirmDelete}
-                className="w-full sm:w-auto rounded-2xl bg-rose-600 text-white px-4 py-2 text-sm font-semibold hover:bg-rose-700 transition"
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  onDelete?.(bubble._id);
+                }}
+                className="rounded-xl bg-rose-600 text-white px-3 py-1.5 text-xs font-bold hover:bg-rose-700 transition"
               >
-                Apagar bolha
+                Estourar Bolha
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body // Alvo do Portal: corpo principal do documento
       )}
     </div>
   );

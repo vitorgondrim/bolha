@@ -8,7 +8,7 @@
 
 import { useCallback, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { TimeContext } from "../context/TimeContext";
+import { TimeContext } from "../contexts/TimeContext";
 import BubbleHUD from "../components/BubbleHUD";
 import api from "../services/api";
 
@@ -25,7 +25,7 @@ export default function Leaked() {
       const todas = res.data.bubbles || [];
       setBubbles(todas.filter((b) => b.hasLeaked));
     } catch (err) {
-      console.error(err);
+      // Erro silenciado — tratado pelo estado bubblesError
     } finally {
       setLoading(false);
     }

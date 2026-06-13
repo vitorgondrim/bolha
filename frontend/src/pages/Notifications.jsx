@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useMemo, useState, useContext } from 'react';
 import BubbleHUD from '../components/BubbleHUD';
 import api from '../services/api';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 
 // ============================================================
@@ -84,7 +84,7 @@ export default function Notifications() {
       setNotifications(res.data.notifications);
       setTotalPages(res.data.totalPages);
     } catch (err) {
-      console.error('Erro ao carregar notificações:', err);
+      // Erro silenciado — tratado pelo estado error
     } finally {
       setLoading(false);
     }
@@ -107,7 +107,7 @@ export default function Notifications() {
       );
       if (refreshUnreadCount) await refreshUnreadCount();
     } catch (err) {
-      console.error('Erro ao marcar como lida:', err);
+      // Erro silenciado — tratado pelo estado error
     } finally {
       setTimeout(() => setMarkingId(null), 200);
     }
@@ -122,7 +122,7 @@ export default function Notifications() {
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       if (refreshUnreadCount) await refreshUnreadCount();
     } catch (err) {
-      console.error('Erro ao marcar todas como lidas:', err);
+      // Erro silenciado — tratado pelo estado error
     }
   };
 

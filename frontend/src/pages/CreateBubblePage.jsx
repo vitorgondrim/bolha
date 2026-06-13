@@ -167,7 +167,7 @@ export default function CreateBubblePage() {
             CABEÇALHO
             ============================================================ */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-black tracking-tighter bg-gradient-to-r from-cyan-400 to-lime-400 bg-clip-text text-transparent">
+          <h1 className="text-4xl font-black tracking-tighter bg-gradient-to-r from-[#7c3aed] to-[#3b82f6] bg-clip-text text-transparent">
             Criar Bolha
           </h1>
           <p className="text-slate-500 mt-2 text-sm">
@@ -333,7 +333,7 @@ export default function CreateBubblePage() {
                   onClick={() => setSubject(s)}
                   className={`px-3 py-1.5 rounded-full text-xs transition-all ${
                     subject === s
-                      ? 'bg-gradient-to-r from-cyan-500 to-lime-500 text-black font-medium shadow-sm'
+                      ? 'bg-gradient-to-r from-[#7c3aed] to-[#3b82f6] text-white font-medium shadow-sm'
                       : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700'
                   }`}
                 >
@@ -360,7 +360,7 @@ export default function CreateBubblePage() {
                     onClick={() => setSubject(s)}
                     className={`px-3 py-1.5 rounded-full text-xs transition-all ${
                       subject === s
-                        ? 'bg-gradient-to-r from-cyan-500 to-lime-500 text-black font-medium shadow-sm'
+                        ? 'bg-gradient-to-r from-[#7c3aed] to-[#3b82f6] text-white font-medium shadow-sm'
                         : 'bg-slate-800/30 text-slate-500 hover:bg-slate-700'
                     }`}
                   >
@@ -378,10 +378,10 @@ export default function CreateBubblePage() {
           <button
             type="submit"
             disabled={loading || !title.trim() || !content.trim()}
-            className="relative w-full group overflow-hidden rounded-xl bg-gradient-to-r from-cyan-500 to-lime-500 disabled:from-slate-700 disabled:to-slate-700 text-black font-bold py-4 transition-all text-lg mt-6 cursor-pointer"
+            className="relative w-full group overflow-hidden rounded-xl bg-gradient-to-r from-[#7c3aed] to-[#3b82f6] disabled:from-slate-700 disabled:to-slate-700 text-white font-bold py-4 transition-all text-lg mt-6 cursor-pointer"
           >
             {/* Efeito de brilho que desliza no hover */}
-            <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+            <div className="absolute inset-0 bg-gradient-to-r from-white/15 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
             <div className="relative flex items-center justify-center gap-2">
               {loading ? (
                 <>

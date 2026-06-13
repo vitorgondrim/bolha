@@ -14,7 +14,8 @@
 // ============================================================
 
 import { useState, useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 
@@ -30,6 +31,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const toast = useToast();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -185,7 +187,7 @@ export default function Login() {
               <div className="text-right">
                 <button
                   type="button"
-                  onClick={() => alert('Em breve!')}
+                  onClick={() => toast.info('Em breve!')}
                   className="text-[11px] text-cyan-400/70 hover:text-cyan-300 transition-colors"
                 >
                   Esqueci a senha

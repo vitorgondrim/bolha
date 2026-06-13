@@ -1,0 +1,101 @@
+const User = require('../models/User');
+const Bubble = require('../models/Bubble');
+const Follow = require('../models/Follow');
+const Notification = require('../models/Notification');
+const { calculateBadges } = require('../utils/badgeUtils');
+const { resetDailySoprosIfNeeded } = require('../utils/soproUtils');
+const logger = require('../utils/logger');
+
+const createNotification = async (io, data) => {
+  try {
+    const notification = await Notification.create(data);
+    if (io) io.to(`user_${data.recipient}`).emit('new_notification', notification);
+    return notification;
+  } catch (error) {
+    logger.error('Erro ao criar notificacao:', { error: error.message });
+  }
+};
+
+const formatUserResponse = (userDoc, hasLeakedBubble = false) => {
+  const userObj = userDoc.toObject ? userDoc.toObject() : userDoc;
+  delete userObj.password;
+  delete userObj.email;
+  delete userObj.googleId;
+  return {
+    ...userObj,
+    bubblesCreated: userObj.totalBubblesCreated || 0,
+    leaksCount: userObj.timesLeaked || 0,
+    soprosGiven: userObj.totalSoprosGiven || 0,
+    followerCount: userObj.followersCount || 0,
+    followingCount: userObj.followingCount || 0,
+    isNeon: hasLeakedBubble
+  };
+};
+
+exports.getOwnProfile = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select('-password');
+    if (!user) return res.status(404).json({ message: 'Usuário não encontrado.' });
+    await resetDailySoprosIfNeeded(user);
+    const activeBubbles = await Bubble.find({ author: req.user._id, expiresAt: { $gt: new Date() } }).select('-comments').sort({ expiresAt: 1 }).limit(50).lean();
+    const badges = calculateBadges(user);
+    const hasLeakedBubble = activeBubbles.some(b => b.hasLeaked === true);
+    return res.json({ user: formatUserResponse(user, hasLeakedBubble), activeBubbles, badges });
+  } catch (error) { return next(error); }
+};
+
+exports.updateProfile = async (req, res, next) => {
+  try {
+    const { bio, pinnedBadge } = req.body;
+    const updateData = {};
+    if (bio !== undefined) updateData.bio = bio.trim();
+    if (pinnedBadge !== undefined) updateData.pinnedBadge = pinnedBadge;
+    const user = await User.findByIdAndUpdate(req.user._id, { $set: updateData }, { new: true, runValidators: true }).select('-password');
+    return res.json({ message: 'Perfil atualizado!', user: formatUserResponse(user) });
+  } catch (error) { return next(error); }
+};
+
+exports.toggleFollow = async (req, res, next) => {
+  try {
+    const targetUserId = req.params.id;
+    const myId = req.user._id;
+    if (targetUserId === myId.toString()) return res.status(400).json({ message: 'Você não pode seguir a si mesmo.' });
+    const existingFollow = await Follow.findOne({ follower: myId, following: targetUserId });
+    if (existingFollow) {
+      await Follow.deleteOne({ _id: existingFollow._id });
+      await User.findByIdAndUpdate(myId, { $inc: { followingCount: -1 } });
+      const updatedTarget = await User.findByIdAndUpdate(targetUserId, { $inc: { followersCount: -1 } }, { new: true });
+      return res.json({ success: true, isFollowing: false, followerCount: updatedTarget.followersCount || 0 });
+    } else {
+      await Follow.create({ follower: myId, following: targetUserId });
+      await User.findByIdAndUpdate(myId, { $inc: { followingCount: 1 } });
+      const updatedTarget = await User.findByIdAndUpdate(targetUserId, { $inc: { followersCount: 1 } }, { new: true });
+      await createNotification(req.io, { recipient: targetUserId, sender: myId, type: 'follow', content: `👥 ${req.user.username} começou a seguir você!` });
+      return res.json({ success: true, isFollowing: true, followerCount: updatedTarget.followersCount || 0 });
+    }
+  } catch (error) { return next(error); }
+};
+
+exports.getPublicProfile = async (req, res, next) => {
+  try {
+    const user = await User.findOne({ username: req.params.username }).select('-password');
+    if (!user) return res.status(404).json({ message: 'Usuário não encontrado.' });
+    const [activeBubbles, isFollowingRelation] = await Promise.all([
+      Bubble.find({ author: user._id, expiresAt: { $gt: new Date() } }).select('-comments').sort({ expiresAt: 1 }).limit(50).lean(),
+      Follow.exists({ follower: req.user._id, following: user._id })
+    ]);
+    const badges = calculateBadges(user);
+    const hasLeakedBubble = activeBubbles.some(b => b.hasLeaked === true);
+    return res.json({ user: { ...formatUserResponse(user, hasLeakedBubble), isFollowing: !!isFollowingRelation }, activeBubbles, badges });
+  } catch (error) { return next(error); }
+};
+
+exports.getPublicProfileById = async (req, res, next) => {
+    try {
+        const user = await User.findById(req.params.id).select('-password');
+        if (!user) return res.status(404).json({ message: 'Usuário não encontrado.' });
+        const activeBubbles = await Bubble.find({ author: user._id, expiresAt: { $gt: new Date() } }).select('-comments').lean();
+        const badges = calculateBadges(user);
+        return res.json({ user: formatUserResponse(user), activeBubbles, badges });
+    } catch (error) { return next(error); }
+};

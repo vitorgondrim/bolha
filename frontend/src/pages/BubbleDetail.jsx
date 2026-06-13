@@ -38,11 +38,13 @@
 //        [🫧 Criar ramificacao]
 // ============================================================
 
-import { useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { AuthContext } from "../context/AuthContext";
-import { TimeContext } from "../context/TimeContext";
+import { AuthContext } from "../contexts/AuthContext";
+import { TimeContext } from "../contexts/TimeContext";
 import BubbleHUD from "../components/BubbleHUD";
+import { useToast } from "../contexts/ToastContext";
+import { useBubbleEvents } from "../hooks/useBubbleEvents";
 import api from "../services/api";
 
 const CORES_RAMO = [
@@ -72,6 +74,7 @@ export default function BubbleDetail() {
   const [criando, setCriando] = useState(false);
   const [mostrarComents, setMostrarComents] = useState(false);
   const [animSopro, setAnimSopro] = useState(false);
+  const toast = useToast();
 
   // ============================================================
   // CARREGAR BOLHA
@@ -99,13 +102,63 @@ export default function BubbleDetail() {
     return () => { cancel = true; };
   }, [id]);
 
+  // ============================================================
+  // SOCKET: EVENTOS EM TEMPO REAL (substitui polling)
+  // ============================================================
+  const handleBubbleUpdated = useCallback((data) => {
+    setBolha((prev) => {
+      if (!prev || prev._id !== data.bubbleId) return prev;
+      return {
+        ...prev,
+        likes: data.likesCount !== undefined
+          ? Array.from({ length: data.likesCount }, (_, i) => prev.likes?.[i] || `placeholder_${i}`)
+          : prev.likes,
+        sopros: data.soprosCount !== undefined
+          ? Array.from({ length: data.soprosCount }, (_, i) => prev.sopros?.[i] || `placeholder_${i}`)
+          : prev.sopros,
+        expiresAt: data.expiresAt || prev.expiresAt,
+        hasLeaked: data.hasLeaked ?? prev.hasLeaked,
+        commentsCount: data.commentsCount ?? prev.comments?.length,
+      };
+    });
+  }, []);
+
+  const handleBubblePopped = useCallback((data) => {
+    if (data.bubbleId === id) {
+      mostrarMsg("💥 Alguém estourou esta bolha!", "info");
+    }
+  }, [id]);
+
+  const handleBubbleDeleted = useCallback((data) => {
+    if (data.bubbleId === id) {
+      mostrarMsg("🗑️ Esta bolha foi excluída pelo autor", "erro");
+      setTimeout(() => navigate("/feed"), 2000);
+    }
+  }, [id, navigate]);
+
+  const handleNewChildBubble = useCallback((child) => {
+    setFilhas((prev) => {
+      if (prev.some((b) => b._id === child._id)) return prev;
+      return [child, ...prev];
+    });
+  }, []);
+
+  // Registra listeners de tempo real para esta bolha
+  useBubbleEvents(id, {
+    onBubbleUpdated: handleBubbleUpdated,
+    onBubblePopped: handleBubblePopped,
+    onBubbleDeleted: handleBubbleDeleted,
+    onNewChildBubble: handleNewChildBubble,
+  });
+
+  // Recarrega dados completos do servidor (usado apenas em ações do usuário)
   const recarregar = async () => {
     try {
       const res = await api.get(`/bubbles/${id}`);
       setBolha(res.data.bubble);
       setFilhas(res.data.childBubbles || []);
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // Erro silenciado — bolha pode ter expirado entre o clique e a requisição
     }
   };
 
@@ -272,6 +325,7 @@ export default function BubbleDetail() {
             {ehAutor && (
               <button
                 onClick={async () => {
+                  if (!window.confirm("Tem certeza que deseja excluir esta bolha? Esta ação não pode ser desfeita.")) return;
                   try {
                     await api.delete(`/bubbles/${bolha._id}`);
                     navigate("/feed");

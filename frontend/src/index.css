@@ -1,20 +1,23 @@
 ﻿/* ============================================================
-   BOLHA - DESIGN SYSTEM (Tailwind v4)
+   BOLHA - DESIGN SYSTEM v2 (Mente Coletiva - Orgânico & Fluido)
    ============================================================ */
 
 @import "tailwindcss";
 
 /* ============================================================
-   TEMA PERSONALIZADO
+   TEMA PERSONALIZADO - Paleta Roxo + Azul Elétrico
    ============================================================ */
 @theme {
   --color-neon-cyan: #00f0ff;
   --color-neon-lime: #39ff14;
-  --color-neon-pink: #ff2d95;
+  --color-neon-pink: #ff2d55;
   --color-neon-purple: #a855f7;
+  --color-deep-purple: #7c3aed;
+  --color-electric-blue: #3b82f6;
   --color-bubble-bg: #08080f;
   --color-bubble-card: #0f0f1a;
   --color-bubble-border: #1e1e35;
+  --color-surface-overlay: rgba(124, 58, 237, 0.05);
   --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
@@ -36,9 +39,9 @@
     margin: 0;
     min-height: 100vh;
     background: 
-      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 240, 255, 0.06), transparent),
-      radial-gradient(ellipse 50% 80% at 80% 50%, rgba(57, 255, 20, 0.04), transparent),
-      radial-gradient(ellipse 50% 80% at 20% 50%, rgba(168, 85, 247, 0.03), transparent),
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(124, 58, 237, 0.08), transparent),
+      radial-gradient(ellipse 60% 80% at 80% 60%, rgba(59, 130, 246, 0.06), transparent),
+      radial-gradient(ellipse 40% 60% at 20% 40%, rgba(168, 85, 247, 0.04), transparent),
       var(--color-bubble-bg);
     background-attachment: fixed;
   }
@@ -48,38 +51,146 @@
 }
 
 /* ============================================================
-   CLASSES CUSTOMIZADAS (sem @apply para compatibilidade v4)
+   GRADIENTES CONSISTENTES (Roxo Profundo → Azul Elétrico)
    ============================================================ */
 
-/* Card principal */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, var(--color-deep-purple), var(--color-electric-blue));
+  color: white;
+  font-weight: 700;
+  padding: 0.75rem 1.5rem;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border: none;
+}
+
+.btn-primary:hover {
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.3), 0 10px 15px -3px rgba(59, 130, 246, 0.2);
+  transform: scale(1.02);
+}
+
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  background: rgba(15, 23, 42, 0.8);
+  color: #cbd5e1;
+  font-weight: 700;
+  padding: 0.75rem 1.5rem;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  border-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+}
+
+.btn-secondary:active { transform: scale(0.98); }
+
+/* ============================================================
+   BOTÕES DE AÇÃO (Like, Sopro, Dislike)
+   ============================================================ */
+
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.btn-action:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
+.btn-action:active { transform: translateY(0); }
+
+.btn-action-like {
+  background: rgba(124, 58, 237, 0.1);
+  border-color: rgba(124, 58, 237, 0.3);
+  color: #a78bfa;
+}
+
+.btn-action-like:hover {
+  background: rgba(124, 58, 237, 0.2);
+  border-color: rgba(124, 58, 237, 0.5);
+}
+
+.btn-action-sopro {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+}
+
+.btn-action-sopro:hover {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.btn-action-dislike {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.btn-action-dislike:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* ============================================================
+   CARDS ORGÂNICOS
+   ============================================================ */
+
 .bubble-card {
   border-radius: 1.5rem;
   background: linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(15, 23, 42, 0.4));
-  border: 1px solid rgba(51, 65, 85, 0.6);
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 0 15px rgba(124, 58, 237, 0.05);
   -webkit-backdrop-filter: blur(24px);
   backdrop-filter: blur(24px);
   transition: all 0.3s ease;
 }
 
 .bubble-card:hover {
-  border-color: rgba(0, 240, 255, 0.3);
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.1), 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.1), 0 20px 25px -5px rgba(0, 0, 0, 0.3);
   transform: translateY(-2px);
 }
 
-/* Card neon (destaque) */
+.bubble-card-root {
+  border: 2px solid rgba(59, 130, 246, 0.35);
+  box-shadow: 0 0 25px rgba(124, 58, 237, 0.15), 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+}
+
+.bubble-card-root:hover {
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 30px rgba(124, 58, 237, 0.2), 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+}
+
 .bubble-card-neon {
   border-radius: 1.5rem;
   background: linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(15, 23, 42, 0.4));
-  border: 1px solid rgba(0, 240, 255, 0.3);
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.1), 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.15), 0 20px 25px -5px rgba(0, 0, 0, 0.3);
   -webkit-backdrop-filter: blur(24px);
   backdrop-filter: blur(24px);
   transition: all 0.3s ease;
 }
 
-/* Card vazado */
 .bubble-card-leaked {
   border-radius: 1.5rem;
   background: linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(15, 23, 42, 0.4));
@@ -90,63 +201,30 @@
   transition: all 0.3s ease;
 }
 
-/* Botoes */
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 1rem;
-  background: linear-gradient(90deg, #00f0ff, #39ff14);
-  color: #020617;
-  font-weight: 700;
-  padding: 0.75rem 1.5rem;
+.bubble-card-child {
+  border-radius: 1.5rem;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.6), rgba(15, 23, 42, 0.3));
+  border: 1px solid rgba(124, 58, 237, 0.15);
+  box-shadow: 0 15px 20px -5px rgba(0, 0, 0, 0.2), 0 0 10px rgba(124, 58, 237, 0.03);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
   transition: all 0.3s ease;
-  cursor: pointer;
-  border: none;
+  opacity: 0.85;
 }
 
-.btn-primary:hover {
-  box-shadow: 0 10px 15px -3px rgba(0, 240, 255, 0.3);
-  transform: scale(1.02);
+.bubble-card-child:hover {
+  border-color: rgba(124, 58, 237, 0.3);
+  opacity: 0.95;
 }
 
-.btn-primary:active {
-  transform: scale(0.98);
-}
+/* ============================================================
+   INPUTS ORGÂNICOS
+   ============================================================ */
 
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 1rem;
-  border: 1px solid #334155;
-  background: rgba(15, 23, 42, 0.8);
-  color: #cbd5e1;
-  font-weight: 700;
-  padding: 0.75rem 1.5rem;
-  transition: all 0.3s ease;
-  cursor: pointer;
-}
-
-.btn-secondary:hover {
-  border-color: rgba(0, 240, 255, 0.5);
-  color: #67e8f9;
-}
-
-.btn-secondary:active {
-  transform: scale(0.98);
-}
-
-/* Input */
 .input-bubble {
   width: 100%;
   border-radius: 1rem;
-  border: 1px solid rgba(51, 65, 85, 0.8);
+  border: 1px solid rgba(124, 58, 237, 0.2);
   background: rgba(2, 6, 23, 0.8);
   padding: 0.875rem 1rem;
   font-size: 0.875rem;
@@ -156,11 +234,32 @@
 }
 
 .input-bubble:focus {
-  border-color: #00f0ff;
-  box-shadow: 0 0 0 2px rgba(0, 240, 255, 0.2);
+  border-color: var(--color-electric-blue);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15), 0 0 15px rgba(124, 58, 237, 0.1);
 }
 
-/* Badges */
+/* ============================================================
+   TEXTOS GRADIENTE
+   ============================================================ */
+
+.text-gradient {
+  background: linear-gradient(135deg, var(--color-deep-purple), var(--color-electric-blue));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-cyan {
+  background: linear-gradient(90deg, var(--color-neon-cyan), var(--color-electric-blue));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============================================================
+   BADGES
+   ============================================================ */
+
 .badge {
   display: inline-flex;
   align-items: center;
@@ -171,6 +270,18 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.badge-purple {
+  background: rgba(124, 58, 237, 0.15);
+  color: #a78bfa;
+  border: 1px solid rgba(124, 58, 237, 0.3);
+}
+
+.badge-blue {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .badge-cyan {
@@ -191,7 +302,10 @@
   border: 1px solid rgba(244, 63, 94, 0.3);
 }
 
-/* Titulos */
+/* ============================================================
+   TÍTULOS
+   ============================================================ */
+
 .section-title {
   color: white;
   font-size: 1.5rem;
@@ -204,21 +318,23 @@
   font-size: 0.875rem;
 }
 
-/* Texto gradiente */
-.text-gradient {
-  background: linear-gradient(90deg, #00f0ff, #39ff14);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
+/* ============================================================
+   DIVISORES E GLOWS
+   ============================================================ */
 
-/* Divisor neon */
 .divider-neon {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.3), transparent);
+  background: linear-gradient(90deg, transparent, rgba(124, 58, 237, 0.3), transparent);
 }
 
-/* Efeitos glow */
+.glow-purple {
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.15), 0 0 60px rgba(124, 58, 237, 0.05);
+}
+
+.glow-blue {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15), 0 0 60px rgba(59, 130, 246, 0.05);
+}
+
 .glow-cyan {
   box-shadow: 0 0 20px rgba(0, 240, 255, 0.15), 0 0 60px rgba(0, 240, 255, 0.05);
 }
@@ -228,7 +344,7 @@
 }
 
 /* ============================================================
-   ANIMACOES
+   ANIMAÇÕES
    ============================================================ */
 
 @keyframes bubble-pulse {
@@ -311,10 +427,11 @@
 }
 
 /* ============================================================
-   UTILITARIOS
+   UTILITÁRIOS
    ============================================================ */
 
 .scrollbar-hide::-webkit-scrollbar { display: none; }
+
 .scrollbar-hide { 
   -ms-overflow-style: none; 
   scrollbar-width: none; 

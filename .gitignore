@@ -1,12 +1,80 @@
-node_modules
+# ============================================================
+# BOLHA - .gitignore
+# ============================================================
+
+# Arquivos de ambiente
 .env
 .env.local
-.env.production
-dist
-dist-ssr
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Dependências
+node_modules/
+jspm_packages/
+web_modules/
+
+# Builds e saídas
+dist/
+build/
+.cache/
+.parcel-cache/
+
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Sistema
 .DS_Store
-.vscode
-.idea
-uploads/*
-!uploads/.gitkeep
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE/Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Uploads locais
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Arquivos temporários
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+# Arquivos de compilação
+*.o
+*.a
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+
+# Arquivos de teste
+coverage/
+.nyc_output/
+*.lcov
+
+# Arquivos de documentação
+docs/
+*.md
+!README.md
+!DEPLOY.md
+!CHECKLIST.md
+!backend/RENDER_INSTRUCTIONS.md
+!frontend/VERCEL_INSTRUCTIONS.md

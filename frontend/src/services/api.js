@@ -36,13 +36,24 @@ if (import.meta.env.PROD && !rawApiBaseUrl) {
   );
 }
 
-let normalizedApiBaseUrl = rawApiBaseUrl?.trim() || '';
-if (!normalizedApiBaseUrl.endsWith('/api')) {
+let normalizedApiBaseUrl = (rawApiBaseUrl || '').trim();
+
+// Validação: se ainda vazio em produção, erro
+if (import.meta.env.PROD && !normalizedApiBaseUrl) {
+  throw new Error(
+    'VITE_API_BASE_URL está vazio após processamento em produção.'
+  );
+}
+
+// Garante que termina com /api
+if (normalizedApiBaseUrl && !normalizedApiBaseUrl.endsWith('/api')) {
   normalizedApiBaseUrl = normalizedApiBaseUrl.replace(/\/+$|\s+$/g, '');
   normalizedApiBaseUrl += '/api';
 }
 
 export const API_BASE_URL = normalizedApiBaseUrl;
+
+// Logs de debug removidos — não expor informações de ambiente no client
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -97,6 +108,12 @@ api.interceptors.response.use(
     // - Erro for 401 (não autorizado)
     // - Não for a requisição de refresh (evita loop)
     // - Ainda não tentou refresh nesta requisição (_retry)
+    // Se a requisição explicitamente pediu para pular redirecionamento de auth
+    if (originalRequest?.skipAuthRedirect) {
+      // Apenas rejeita sem tentar refresh ou redirecionar
+      return Promise.reject(error);
+    }
+
     if (
       error.response?.status === 401 &&
       !isRefreshRequest &&
