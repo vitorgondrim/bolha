@@ -247,10 +247,10 @@ export default function Profile() {
             )}
           </div>
 
-          {/* Avatar com OxygenRing */}
+                    {/* Avatar com OxygenRing - layout flex para alinhamento perfeito */}
           <div className="relative flex justify-center -mt-12 mb-4">
-            <div className="relative group">
-              <div className="relative">
+            <div className="relative inline-flex items-center gap-3">
+              <div className="relative shrink-0">
                 {/* Borda gradiente roxo/azul */}
                 <div className={`w-24 h-24 rounded-full bg-gradient-to-br from-[#7c3aed] to-[#3b82f6] p-1 shadow-xl ${hasActiveBubbles ? 'shadow-[#7c3aed]/50' : ''}`}>
                   {avatarImage ? (
@@ -274,12 +274,12 @@ export default function Profile() {
                   </>
                 )}
               </div>
-              {/* OxygenRing ao lado do avatar */}
-              {hasActiveBubbles && (
-                <div className="absolute -right-10 top-1/2 -translate-y-1/2">
+              {/* OxygenRing ao lado do avatar — sempre renderizado com opacity condicional para evitar layout shift */}
+              <div className={`shrink-0 transition-opacity duration-300 ${hasActiveBubbles ? 'opacity-100' : 'opacity-0 pointer-events-none w-10 h-10'}`}>
+                {hasActiveBubbles && (
                   <OxygenRing oxygenLevel={avgOxygen} maxOxygen={100} size={40} showPercentage={false} />
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
 
