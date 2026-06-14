@@ -254,46 +254,46 @@ export default function Profile() {
             )}
           </div>
 
-                    {/* ================================================================ */}
-          {/* AVATAR + OXYGEN RING                                          */}
-          {/* Container flex estrito: ambos filhos irmãos, sem position    */}
-          {/* OxygenRing SEMPRE no DOM (via show prop) — zero Layout Shift */}
           {/* ================================================================ */}
-          <div className="flex justify-center -mt-12 mb-4">
-            <div className="flex items-center justify-center gap-3">
-              {/* Avatar — shrink-0 evita que o avatar encolha */}
-              <div className="relative shrink-0">
-                <div className={`w-24 h-24 rounded-full bg-gradient-to-br from-[#7c3aed] to-[#3b82f6] p-1 shadow-xl ${hasActiveBubbles ? 'shadow-[#7c3aed]/50' : ''}`}>
-                  {avatarImage ? (
-                    <img src={avatarImage} alt={user.username} className="w-full h-full rounded-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full rounded-full bg-slate-950 flex items-center justify-center text-3xl font-black text-white">
-                      {(user?.username?.charAt(0) || '?').toUpperCase()}
-                    </div>
-                  )}
-                </div>
-                {isMyProfile && (
-                  <>
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-sm hover:bg-slate-700 transition"
-                      title="Alterar foto"
-                    >
-                      📷
-                    </button>
-                    <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" disabled={uploading} />
-                  </>
+          {/* AVATAR + OXYGEN RING                                          */}
+          {/* Container flex puro: pai flex, filhos irmãos, gap-2            */}
+          {/* Sem position absolute, sem relative, sem -mt-                  */}
+          {/* OxygenRing = null se inativo (renderização condicional)         */}
+          {/* ================================================================ */}
+          <div className="flex items-center justify-center gap-2 mb-4 pt-16">
+            {/* Avatar */}
+            <div className="relative shrink-0">
+              <div className={`w-24 h-24 rounded-full bg-gradient-to-br from-[#7c3aed] to-[#3b82f6] p-1 shadow-xl ${hasActiveBubbles ? 'shadow-[#7c3aed]/50' : ''}`}>
+                {avatarImage ? (
+                  <img src={avatarImage} alt={user.username} className="w-full h-full rounded-full object-cover" />
+                ) : (
+                  <div className="w-full h-full rounded-full bg-slate-950 flex items-center justify-center text-3xl font-black text-white">
+                    {(user?.username?.charAt(0) || '?').toUpperCase()}
+                  </div>
                 )}
               </div>
-              {/* OxygenRing — SEMPRE no DOM. Visibilidade controlada via prop show */}
+              {isMyProfile && (
+                <>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-sm hover:bg-slate-700 transition"
+                    title="Alterar foto"
+                  >
+                    📷
+                  </button>
+                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" disabled={uploading} />
+                </>
+              )}
+            </div>
+            {/* OxygenRing — renderização condicional: null se sem bolhas */}
+            {hasActiveBubbles === true && (
               <OxygenRing
                 oxygenLevel={avgOxygen || 0}
                 maxOxygen={100}
                 size={40}
                 showPercentage={false}
-                show={hasActiveBubbles}
               />
-            </div>
+            )}
           </div>
           {/* ================================================================ */}
 

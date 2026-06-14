@@ -2,8 +2,8 @@
 // BOLHA - REDE SOCIAL EFÊMERA
 // Componente: OxygenRing
 // Propósito: Círculo de progresso SVG com gradiente neon.
-//            Muda de vermelho → laranja → ciano → roxo conforme
-//            o nível de oxigênio aumenta.
+//            Layout 100% flex — sem position absolute, sem relative.
+//            Quando show=false, retorna null (remove do DOM).
 // ============================================================
 
 import { useMemo } from 'react';
@@ -56,16 +56,16 @@ const getGradientColors = (level) => {
   };
 };
 
-export default function OxygenRing({ 
-  oxygenLevel = 0, 
+export default function OxygenRing({
+  oxygenLevel = 0,
   maxOxygen = 100,
   size = SIZE,
   animated = true,
   showPercentage = true,
   show = true,
 }) {
-  // 🔥 Não remove do DOM: usa visibility hidden para reservar espaço no layout
-  // Isso elimina o Layout Shift quando o indicador aparece/desaparece
+  // 🔥 Remove completamente do DOM quando show=false — zero espaço residual
+  if (!show) return null;
 
   const percentage = useMemo(() => {
     if (maxOxygen <= 0) return 0;
@@ -87,21 +87,27 @@ export default function OxygenRing({
       style={{
         width: size,
         height: size,
-        visibility: show ? 'visible' : 'hidden',
-        boxShadow: show ? `0 0 ${isCritical ? '12px' : '8px'} ${colors.glow}` : 'none',
+        boxShadow: `0 0 ${isCritical ? '12px' : '8px'} ${colors.glow}`,
         borderRadius: '9999px',
-        transition: 'box-shadow 0.5s ease, visibility 0s',
+        transition: 'box-shadow 0.5s ease',
       }}
     >
-      {/* SVG do círculo */}
+      {/* SVG do círculo — sem position, sem absolute, sem transform externo */}
       <svg
         width={size}
         height={size}
-        className="transform -rotate-90"
         style={{
-          filter: show ? `drop-shadow(0 0 4px ${colors.glow})` : 'none',
+          display: 'block',
+          filter: `drop-shadow(0 0 4px ${colors.glow})`,
         }}
       >
+        <defs>
+          <linearGradient id={`oxygen-grad-${percentage}`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={colors.from} />
+            <stop offset="100%" stopColor={colors.to} />
+          </linearGradient>
+        </defs>
+
         {/* Círculo de fundo */}
         <circle
           cx={size / 2}
@@ -112,52 +118,30 @@ export default function OxygenRing({
           strokeWidth={STROKE_WIDTH}
         />
 
-        {/* Gradiente definido inline */}
-        <defs>
-          <linearGradient id={`oxygen-grad-${percentage}`} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor={colors.from} />
-            <stop offset="100%" stopColor={colors.to} />
-          </linearGradient>
-        </defs>
-
         {/* Círculo de progresso */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={RADIUS}
           fill="none"
-          stroke={show ? `url(#oxygen-grad-${percentage})` : 'rgba(30, 30, 53, 0.6)'}
+          stroke={`url(#oxygen-grad-${percentage})`}
           strokeWidth={STROKE_WIDTH}
           strokeLinecap="round"
           strokeDasharray={CIRCUMFERENCE}
           strokeDashoffset={strokeDashoffset}
           className={animated ? 'transition-all duration-1000 ease-linear' : ''}
-          style={{
-            filter: show ? `drop-shadow(0 0 3px ${colors.glow})` : 'none',
-          }}
+          style={{ filter: `drop-shadow(0 0 3px ${colors.glow})` }}
         />
 
-        {/* Pontos de destaque nas extremidades */}
+        {/* Ponto de destaque na extremidade */}
         <circle
           cx={size / 2}
           cy={STROKE_WIDTH / 2}
           r={2}
-          fill={show ? colors.to : 'rgba(30, 30, 53, 0.6)'}
-          style={{ filter: show ? `drop-shadow(0 0 4px ${colors.to})` : 'none' }}
+          fill={colors.to}
+          style={{ filter: `drop-shadow(0 0 4px ${colors.to})` }}
         />
       </svg>
-
-      {/* Texto da porcentagem no centro */}
-      {showPercentage && show && (
-        <span
-          className={`absolute font-bold transition-all duration-500 ${
-            size <= 40 ? 'text-[8px]' : 'text-[10px]'
-          } ${isCritical ? 'text-rose-400' : ''}`}
-          style={{ color: isCritical ? '#fb7185' : colors.to }}
-        >
-          {percentage}%
-        </span>
-      )}
     </div>
   );
 }
