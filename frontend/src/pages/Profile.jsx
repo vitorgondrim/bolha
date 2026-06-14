@@ -67,7 +67,8 @@ export default function Profile() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const url = isMyProfile ? '/users/me' : `/users/${username}`;
+        // 🔥 Garantir que para perfis públicos passamos o username (não o _id)
+      const url = isMyProfile ? '/users/me' : `/users/${username}`;
         const res = await api.get(url);
         setProfileData(res.data);
         setBioText(res.data.user?.bio || '');

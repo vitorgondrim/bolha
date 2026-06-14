@@ -85,7 +85,19 @@ exports.toggleFollow = async (req, res, next) => {
 
 exports.getPublicProfile = async (req, res, next) => {
   try {
-    const user = await User.findOne({ username: req.params.username }).select('-password');
+    // 🔥 Normaliza o parâmetro: pode ser username ou _id (fallback legado)
+    let user;
+    const param = req.params?.username?.toLowerCase().trim();
+    if (!param) return res.status(400).json({ message: 'Parâmetro de usuário inválido.' });
+
+    // Tenta buscar por username primeiro
+    user = await User.findOne({ username: param }).select('-password');
+
+    // Fallback: se não achou por username, tenta por _id (para compatibilidade)
+    if (!user && /^[0-9a-fA-F]{24}$/.test(param)) {
+      user = await User.findById(param).select('-password');
+    }
+
     if (!user) return res.status(404).json({ message: 'Usuário não encontrado.' });
     
     // CORREÇÃO: Verificar se req.user existe antes de acessar req.user._id

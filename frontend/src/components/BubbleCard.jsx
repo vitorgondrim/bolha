@@ -5,6 +5,7 @@
 // ============================================================
 
 import { useMemo, useState, useContext } from 'react';
+import { useNavigate } from 'react-router-dom'; // 🔥 Para navegação ao perfil do autor
 import { createPortal } from 'react-dom'; // Sênior: Para renderizar o modal na raiz da página (Evita bugs de layout)
 import { TimeContext } from '../contexts/TimeContext.jsx';
 
@@ -26,6 +27,7 @@ export default function BubbleCard({
   showComments = false, 
   showCommentForm = false 
 }) {
+  const navigate = useNavigate(); // 🔥 Para navegação ao perfil do autor
   const { timeNow } = useContext(TimeContext);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -109,8 +111,14 @@ export default function BubbleCard({
       {/* CABEÇALHO */}
       <div className="relative z-10 flex justify-between items-start gap-3 mb-4">
         <div>
-          <div className="flex items-center gap-2 text-slate-300 text-sm">
-            <span className="font-semibold text-cyan-300">
+                    <div className="flex items-center gap-2 text-slate-300 text-sm">
+            <span
+              className="font-semibold text-cyan-300 hover:text-cyan-200 cursor-pointer transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (bubble.author?.username) navigate(`/profile/${bubble.author.username}`);
+              }}
+            >
               @{bubble.author?.username || 'Anônimo'}
             </span>
             {bubble.hasLeaked && (
@@ -220,8 +228,14 @@ export default function BubbleCard({
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                 {latestComments.map((comment) => (
-                  <div key={comment._id} className="rounded-xl bg-slate-900/60 p-2.5 border border-slate-800/80">
-                    <div className="text-[10px] font-semibold text-cyan-400/80 mb-0.5">
+                                    <div key={comment._id} className="rounded-xl bg-slate-900/60 p-2.5 border border-slate-800/80">
+                    <div
+                      className="text-[10px] font-semibold text-cyan-400/80 mb-0.5 cursor-pointer hover:text-cyan-300 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (comment.author?.username) navigate(`/profile/${comment.author.username}`);
+                      }}
+                    >
                       @{comment.author?.username || 'anon'}
                     </div>
                     <div className="text-xs text-slate-200">{comment.text}</div>

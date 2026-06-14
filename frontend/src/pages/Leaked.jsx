@@ -97,7 +97,15 @@ export default function Leaked() {
                         <span className="text-[8px] font-bold text-black bg-lime-500 px-1.5 py-0.5 rounded-full">Vazou</span>
                       </div>
                       <div className="flex items-center gap-3 mt-1.5 text-[10px] text-slate-500">
-                        <span> by {bubble.author?.username || "anonimo"}</span>
+                        <span
+                          className="cursor-pointer hover:text-cyan-400 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (bubble.author?.username) navigate(`/profile/${bubble.author.username}`);
+                          }}
+                        >
+                          by @{bubble.author?.username || "anonimo"}
+                        </span>
                         <span> Score: {score}</span>
                         {tempoRestante > 0 && (
                           <span className="text-lime-400/70">{formatTempo(tempoRestante)}</span>

@@ -213,7 +213,13 @@ export default function Trending() {
                   {bubbles[1]?.title?.charAt(0) || '🥈'}
                 </div>
                 <div className="mt-2 text-xs text-gray-300">2º</div>
-                <div className="text-[10px] text-gray-400 max-w-20 truncate">
+                                <div
+                  className="text-[10px] text-gray-400 max-w-20 truncate cursor-pointer hover:text-cyan-300 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (bubbles[1]?.author?.username) navigate(`/profile/${bubbles[1].author.username}`);
+                  }}
+                >
                   @{bubbles[1]?.author?.username}
                 </div>
               </div>
@@ -224,7 +230,13 @@ export default function Trending() {
                   👑
                 </div>
                 <div className="mt-2 text-sm font-bold text-yellow-400">1º</div>
-                <div className="text-xs text-yellow-400/80 max-w-[90px] truncate font-medium">
+                                <div
+                  className="text-xs text-yellow-400/80 max-w-[90px] truncate font-medium cursor-pointer hover:text-cyan-300 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (bubbles[0]?.author?.username) navigate(`/profile/${bubbles[0].author.username}`);
+                  }}
+                >
                   @{bubbles[0]?.author?.username}
                 </div>
               </div>
@@ -235,7 +247,13 @@ export default function Trending() {
                   {bubbles[2]?.title?.charAt(0) || '🥉'}
                 </div>
                 <div className="mt-2 text-xs text-amber-400">3º</div>
-                <div className="text-[10px] text-amber-400/70 max-w-[70px] truncate">
+                                <div
+                  className="text-[10px] text-amber-400/70 max-w-[70px] truncate cursor-pointer hover:text-cyan-300 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (bubbles[2]?.author?.username) navigate(`/profile/${bubbles[2].author.username}`);
+                  }}
+                >
                   @{bubbles[2]?.author?.username}
                 </div>
               </div>
@@ -292,7 +310,13 @@ export default function Trending() {
                         <span className="text-2xl">
                           {rankStyle.icon === '👑' ? '🔥' : '⚡'}
                         </span>
-                        <span className={`font-bold ${rankStyle.rankText}`}>
+                                                <span
+                          className={`font-bold ${rankStyle.rankText} cursor-pointer hover:text-cyan-300 transition-colors`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (bubble.author?.username) navigate(`/profile/${bubble.author.username}`);
+                          }}
+                        >
                           @{bubble.author?.username}
                         </span>
 

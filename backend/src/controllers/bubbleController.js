@@ -580,8 +580,8 @@ exports.useSopro = async (req, res, next) => {
     await checkForLeak(updatedBubble, req.io);
     await updateSurvivorRecord(updatedUser, updatedBubble);
 
-    // ============================================================
-    // FASE 6: RESPOSTA
+        // ============================================================
+    // FASE 6: RESPOSTA — Inclui dailySoprosUsed para o frontend atualizar o contador
     // ============================================================
     const updatePayload = {
       bubbleId: updatedBubble._id,
@@ -602,6 +602,7 @@ exports.useSopro = async (req, res, next) => {
       ...updatePayload,
       remainingDaily: Math.max(0, dailyLimit - (updatedUser.dailySoprosUsed || 0)),
       purchasedSopros: updatedUser.soprosPurchased || 0,
+      dailySoprosUsed: updatedUser.dailySoprosUsed || 0, // 🔥 NOVO: permite frontend atualizar contador instantaneamente
     });
   } catch (error) {
     logger.error('Erro no uso de sopro:', { userId: req.user?._id, bubbleId: req.bubble?._id, error: error.message });

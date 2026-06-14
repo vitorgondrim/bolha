@@ -60,7 +60,7 @@ const CORES_RAMO = [
 export default function BubbleDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useContext(AuthContext);
+  const { user, refreshUser } = useContext(AuthContext);
   const { timeNow } = useContext(TimeContext);
 
   const [bolha, setBolha] = useState(null);
@@ -75,6 +75,9 @@ export default function BubbleDetail() {
   const [mostrarComents, setMostrarComents] = useState(false);
   const [animSopro, setAnimSopro] = useState(false);
   const toast = useToast();
+
+  // 🔥 Estado local para contador de sopros (sincronizado com resposta da API)
+  const [dailySoprosUsed, setDailySoprosUsed] = useState(user?.dailySoprosUsed || 0);
 
   // ============================================================
   // CARREGAR BOLHA
@@ -234,6 +237,12 @@ export default function BubbleDetail() {
     setTimeout(() => setAnimSopro(false), 600);
     try {
       const res = await api.post(`/bubbles/${bolha._id}/sopro`);
+      // 🔥 Atualiza o contador de sopros local (dailySoprosUsed) com o valor retornado pela API
+      if (res.data?.dailySoprosUsed !== undefined) {
+        setDailySoprosUsed(res.data.dailySoprosUsed);
+      }
+      // 🔥 Atualiza o usuário no AuthContext para refletir o novo saldo no BubbleHUD
+      if (refreshUser) await refreshUser();
       await recarregar();
       mostrarMsg(`🫧 ${res.data.message || "Soprou! +120 min"}`, "sucesso");
     } catch (err) {
@@ -380,16 +389,19 @@ export default function BubbleDetail() {
               </div>
             )}
 
-            {/* Autor */}
+            {/* Autor — 🔥 Agora com link para o perfil */}
             <div className="mt-6">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/5">
+              <button
+                onClick={() => navigate(`/profile/${bolha.author?.username}`)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/5 hover:bg-white/10 hover:border-cyan-400/30 transition-all cursor-pointer"
+              >
                 <div className="w-5 h-5 rounded-full bg-gradient-to-br from-cyan-400/40 to-lime-400/40 flex items-center justify-center text-[7px] font-bold text-white/60">
                   {(bolha.author?.username || "A").charAt(0).toUpperCase()}
                 </div>
-                <span className="text-[10px] text-slate-400">
+                <span className="text-[10px] text-slate-400 hover:text-cyan-300 transition-colors">
                   @{bolha.author?.username || "anonimo"}
                 </span>
-              </div>
+              </button>
             </div>
 
             {/* Tempo de vida */}
@@ -503,7 +515,10 @@ export default function BubbleDetail() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-bold text-cyan-300/60">
+                      <span
+                        className="text-[9px] font-bold text-cyan-300/60 cursor-pointer hover:text-cyan-200 transition-colors"
+                        onClick={() => navigate(`/profile/${c.username || c.author?.username}`)}
+                      >
                         @{c.username || c.author?.username || "anonimo"}
                       </span>
                       {c.createdAt && (
@@ -536,10 +551,14 @@ export default function BubbleDetail() {
               </div>
               {/* Comentadores */}
               {bolha.comments && bolha.comments.slice(0, 5).map((c, i) => (
-                <div key={i} className="rounded-full bg-white/5 border border-white/10 px-3 py-2">
+                <button
+                  key={i}
+                  onClick={() => navigate(`/profile/${c.username || c.author?.username}`)}
+                  className="rounded-full bg-white/5 border border-white/10 px-3 py-2 hover:bg-white/10 hover:border-cyan-400/30 transition-all cursor-pointer"
+                >
                   <span className="text-[8px] text-slate-500">@</span>
                   <span className="text-[9px] text-slate-400">{c.username || c.author?.username || "alguem"}</span>
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -573,7 +592,7 @@ export default function BubbleDetail() {
                           {child.title || "Pensamento"}
                         </p>
                         <p className="text-[8px] text-slate-500 mt-0.5">
-                          {cConex} conex · @{child.author?.username || "anonimo"}
+                          {cConex} conex · <span className="hover:text-cyan-400 transition-colors">@{child.author?.username || "anonimo"}</span>
                         </p>
                       </div>
                       <span className="text-slate-500 text-xs opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0">→</span>
