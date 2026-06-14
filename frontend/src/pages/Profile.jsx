@@ -256,12 +256,12 @@ export default function Profile() {
 
                     {/* ================================================================ */}
           {/* AVATAR + OXYGEN RING                                          */}
-          {/* Layout: flex items-center justify-center, sem position abs    */}
-          {/* OxygenRing remove-se do DOM via show=false quando inativo      */}
+          {/* Container flex estrito: ambos filhos irmãos, sem position    */}
+          {/* OxygenRing SEMPRE no DOM (via show prop) — zero Layout Shift */}
           {/* ================================================================ */}
           <div className="flex justify-center -mt-12 mb-4">
             <div className="flex items-center justify-center gap-3">
-              {/* Avatar */}
+              {/* Avatar — shrink-0 evita que o avatar encolha */}
               <div className="relative shrink-0">
                 <div className={`w-24 h-24 rounded-full bg-gradient-to-br from-[#7c3aed] to-[#3b82f6] p-1 shadow-xl ${hasActiveBubbles ? 'shadow-[#7c3aed]/50' : ''}`}>
                   {avatarImage ? (
@@ -285,16 +285,14 @@ export default function Profile() {
                   </>
                 )}
               </div>
-              {/* OxygenRing — condicional (remove do DOM quando sem bolhas) */}
-              {hasActiveBubbles && (
-                <OxygenRing
-                  oxygenLevel={avgOxygen || 0}
-                  maxOxygen={100}
-                  size={40}
-                  showPercentage={false}
-                  show={true}
-                />
-              )}
+              {/* OxygenRing — SEMPRE no DOM. Visibilidade controlada via prop show */}
+              <OxygenRing
+                oxygenLevel={avgOxygen || 0}
+                maxOxygen={100}
+                size={40}
+                showPercentage={false}
+                show={hasActiveBubbles}
+              />
             </div>
           </div>
           {/* ================================================================ */}

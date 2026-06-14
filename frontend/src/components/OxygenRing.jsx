@@ -64,8 +64,8 @@ export default function OxygenRing({
   showPercentage = true,
   show = true,
 }) {
-  // 🔥 Se show=false, remove completamente do DOM — zero layout impact
-  if (!show) return null;
+  // 🔥 Não remove do DOM: usa visibility hidden para reservar espaço no layout
+  // Isso elimina o Layout Shift quando o indicador aparece/desaparece
 
   const percentage = useMemo(() => {
     if (maxOxygen <= 0) return 0;
@@ -82,24 +82,25 @@ export default function OxygenRing({
   const isCritical = percentage <= 15;
 
   return (
-    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
-      {/* Glow externo */}
-      <div
-        className={`absolute inset-0 rounded-full transition-all duration-700 ${
-          isCritical ? 'animate-pulse' : ''
-        }`}
-        style={{
-          boxShadow: `0 0 ${isCritical ? '12px' : '8px'} ${colors.glow}`,
-          transition: 'box-shadow 0.5s ease',
-        }}
-      />
-
+    <div
+      className="inline-flex items-center justify-center shrink-0"
+      style={{
+        width: size,
+        height: size,
+        visibility: show ? 'visible' : 'hidden',
+        boxShadow: show ? `0 0 ${isCritical ? '12px' : '8px'} ${colors.glow}` : 'none',
+        borderRadius: '9999px',
+        transition: 'box-shadow 0.5s ease, visibility 0s',
+      }}
+    >
       {/* SVG do círculo */}
       <svg
         width={size}
         height={size}
         className="transform -rotate-90"
-        style={{ filter: `drop-shadow(0 0 4px ${colors.glow})` }}
+        style={{
+          filter: show ? `drop-shadow(0 0 4px ${colors.glow})` : 'none',
+        }}
       >
         {/* Círculo de fundo */}
         <circle
@@ -125,14 +126,14 @@ export default function OxygenRing({
           cy={size / 2}
           r={RADIUS}
           fill="none"
-          stroke={`url(#oxygen-grad-${percentage})`}
+          stroke={show ? `url(#oxygen-grad-${percentage})` : 'rgba(30, 30, 53, 0.6)'}
           strokeWidth={STROKE_WIDTH}
           strokeLinecap="round"
           strokeDasharray={CIRCUMFERENCE}
           strokeDashoffset={strokeDashoffset}
           className={animated ? 'transition-all duration-1000 ease-linear' : ''}
           style={{
-            filter: `drop-shadow(0 0 3px ${colors.glow})`,
+            filter: show ? `drop-shadow(0 0 3px ${colors.glow})` : 'none',
           }}
         />
 
@@ -141,13 +142,13 @@ export default function OxygenRing({
           cx={size / 2}
           cy={STROKE_WIDTH / 2}
           r={2}
-          fill={colors.to}
-          style={{ filter: `drop-shadow(0 0 4px ${colors.to})` }}
+          fill={show ? colors.to : 'rgba(30, 30, 53, 0.6)'}
+          style={{ filter: show ? `drop-shadow(0 0 4px ${colors.to})` : 'none' }}
         />
       </svg>
 
       {/* Texto da porcentagem no centro */}
-      {showPercentage && (
+      {showPercentage && show && (
         <span
           className={`absolute font-bold transition-all duration-500 ${
             size <= 40 ? 'text-[8px]' : 'text-[10px]'
