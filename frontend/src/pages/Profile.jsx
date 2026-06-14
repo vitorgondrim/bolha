@@ -5,7 +5,6 @@
 // Exibe o perfil completo de um usuário:
 //   - Capa e avatar (editáveis se for o próprio perfil)
 //   - Bio, estatísticas (seguidores, seguindo, bolhas)
-//   - OxygenRing com média de oxigênio
 //   - Emblemas (conquistas)
 //   - Abas: Ativas, Estouradas, Populares, Recentes
 //   - HierarchyIndicator nos cards
@@ -17,7 +16,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import BubbleHUD from '../components/BubbleHUD';
-import OxygenRing from '../components/OxygenRing';
 import HierarchyIndicator from '../components/HierarchyIndicator';
 import api from '../services/api';
 
@@ -131,13 +129,6 @@ export default function Profile() {
     const total = alive.reduce((sum, b) => sum + (b.oxygenLevel || 0), 0);
     return Math.round(total / alive.length);
   }, [profileBubbles]);
-
-    // 🔥 hasActiveBubbles: recalcula sempre que profileData mudar
-  // Usa activeBubbles vindo do /users/me (não depende do fetch de bubbles)
-  const hasActiveBubbles = useMemo(() => {
-    if (!profileData?.activeBubbles) return false;
-    return Array.isArray(profileData.activeBubbles) && profileData.activeBubbles.length > 0;
-  }, [profileData]);
 
     const handleFollowToggle = async () => {
     if (!profileData?.user?._id) return; // CORRECAO: Protecao contra objeto indefinido
@@ -255,16 +246,13 @@ export default function Profile() {
           </div>
 
           {/* ================================================================ */}
-          {/* AVATAR + OXYGEN RING                                          */}
-          {/* Container flex puro SEM position, SEM -mt-, SEM pt-            */}
-          {/* Avatar e OxygenRing como únicos filhos irmãos                 */}
-          {/* gap-3 no pai, items-center alinha verticalmente               */}
-          {/* OxygenRing = null se inativo (soma zero ao layout)            */}
+          {/* AVATAR — centralizado, sem OxygenRing                          */}
+          {/* Container flex puro sem gap, sem position                      */}
           {/* ================================================================ */}
-          <div className="flex items-center justify-center gap-3 mt-[-48px] mb-4">
+          <div className="flex justify-center mt-[-48px] mb-4">
             {/* Avatar */}
             <div className="relative shrink-0">
-              <div className={`w-24 h-24 rounded-full bg-gradient-to-br from-[#7c3aed] to-[#3b82f6] p-1 shadow-xl ${hasActiveBubbles ? 'shadow-[#7c3aed]/50' : ''}`}>
+              <div className={`w-24 h-24 rounded-full bg-gradient-to-br from-[#7c3aed] to-[#3b82f6] p-1 shadow-xl`}>
                 {avatarImage ? (
                   <img src={avatarImage} alt={user.username} className="w-full h-full rounded-full object-cover" />
                 ) : (
@@ -286,15 +274,6 @@ export default function Profile() {
                 </>
               )}
             </div>
-            {/* OxygenRing — renderização condicional: null se sem bolhas */}
-            {hasActiveBubbles === true && (
-              <OxygenRing
-                oxygenLevel={avgOxygen || 0}
-                maxOxygen={100}
-                size={40}
-                showPercentage={false}
-              />
-            )}
           </div>
           {/* ================================================================ */}
 
