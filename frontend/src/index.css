@@ -444,3 +444,152 @@
 .pt-safe {
   padding-top: env(safe-area-inset-top, 0px);
 }
+
+/* ============================================================
+   ANIMAÇÕES ESPACIAIS — MENTE COLETIVA (CANVAS NEURAL)
+   ============================================================ */
+
+@keyframes bubble-float {
+  0%, 100% { transform: translate(0px, 0px) scale(1); }
+  20% { transform: translate(8px, -12px) scale(1.02); }
+  40% { transform: translate(-6px, 8px) scale(0.98); }
+  60% { transform: translate(10px, -6px) scale(1.01); }
+  80% { transform: translate(-4px, 10px) scale(0.99); }
+}
+
+@keyframes bubble-drift {
+  0%, 100% { transform: translate(0, 0); }
+  33% { transform: translate(12px, -18px); }
+  66% { transform: translate(-8px, 14px); }
+}
+
+@keyframes nebula-pulse {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.4; }
+  50% { transform: scale(1.08) rotate(1deg); opacity: 0.7; }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 20px rgba(124, 58, 237, 0.1),
+      0 0 60px rgba(59, 130, 246, 0.05);
+  }
+  50% {
+    box-shadow:
+      0 0 30px rgba(124, 58, 237, 0.2),
+      0 0 80px rgba(59, 130, 246, 0.1),
+      0 0 120px rgba(124, 58, 237, 0.05);
+  }
+}
+
+@keyframes constellation-move {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(20px, -30px) rotate(1deg); }
+  50% { transform: translate(-15px, 15px) rotate(-0.5deg); }
+  75% { transform: translate(10px, -25px) rotate(0.5deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+@keyframes signal-ring {
+  0% { transform: scale(0.9); opacity: 0.4; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+
+@keyframes signal-wave {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+@keyframes star-twinkle {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.9; }
+}
+
+.animate-bubble-float {
+  animation: bubble-float var(--float-duration, 8s) ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+
+.animate-bubble-drift {
+  animation: bubble-drift var(--drift-duration, 12s) ease-in-out infinite;
+  animation-delay: var(--drift-delay, 0s);
+}
+
+.animate-nebula-pulse {
+  animation: nebula-pulse 8s ease-in-out infinite;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse var(--glow-duration, 4s) ease-in-out infinite;
+  animation-delay: var(--glow-delay, 0s);
+}
+
+.animate-constellation {
+  animation: constellation-move var(--constellation-duration, 20s) ease-in-out infinite;
+  animation-delay: var(--constellation-delay, 0s);
+}
+
+.animate-signal-ring {
+  animation: signal-ring 2s ease-out infinite;
+}
+
+.animate-signal-wave {
+  animation: signal-wave 3s ease-out infinite;
+}
+
+.animate-star-twinkle {
+  animation: star-twinkle 4s ease-in-out infinite;
+}
+
+/* ============================================================
+   MÁSCARAS ORGÂNICAS — BORDA CELESTIAL
+   ============================================================ */
+
+.mask-circle-glow {
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, black 60%, transparent 100%);
+  mask-image: radial-gradient(circle at 50% 50%, black 60%, transparent 100%);
+}
+
+.mask-soft-edge {
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, black 70%, transparent 100%);
+  mask-image: radial-gradient(circle at 50% 50%, black 70%, transparent 100%);
+}
+
+/* ============================================================
+   CANVAS ESPACIAL — FUNDO COSMOS DO FEED
+   ============================================================ */
+
+.space-canvas {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 70% 40% at 20% 30%, rgba(124, 58, 237, 0.04), transparent),
+    radial-gradient(ellipse 50% 60% at 80% 70%, rgba(59, 130, 246, 0.03), transparent),
+    radial-gradient(ellipse 40% 40% at 50% 20%, rgba(168, 85, 247, 0.02), transparent),
+    radial-gradient(ellipse 60% 50% at 30% 80%, rgba(6, 182, 212, 0.02), transparent),
+    var(--color-bubble-bg);
+}
+
+.space-canvas::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 10% 20%, rgba(168, 85, 247, 0.3), transparent),
+    radial-gradient(1px 1px at 30% 60%, rgba(59, 130, 246, 0.2), transparent),
+    radial-gradient(1px 1px at 50% 10%, rgba(6, 182, 212, 0.25), transparent),
+    radial-gradient(1px 1px at 70% 40%, rgba(168, 85, 247, 0.15), transparent),
+    radial-gradient(1px 1px at 90% 80%, rgba(59, 130, 246, 0.2), transparent),
+    radial-gradient(1px 1px at 15% 85%, rgba(6, 182, 212, 0.3), transparent),
+    radial-gradient(1.5px 1.5px at 45% 45%, rgba(168, 85, 247, 0.4), transparent),
+    radial-gradient(1.5px 1.5px at 65% 15%, rgba(59, 130, 246, 0.3), transparent),
+    radial-gradient(1px 1px at 85% 55%, rgba(124, 58, 237, 0.2), transparent);
+  pointer-events: none;
+  animation: star-twinkle 8s ease-in-out infinite;
+}
+
+/* Scrollbar invisível no feed (overflow hidden) */
+body.feed-active {
+  overflow: hidden;
+}

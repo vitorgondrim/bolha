@@ -17,7 +17,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AuthContext } from '../contexts/AuthContext';
 import BubbleHUD from '../components/BubbleHUD';
-import BubbleCard from '../components/BubbleCard';
+import OrganicBubble from '../components/bubbles/OrganicBubble';
 import api from '../services/api';
 
 const DEBOUNCE_DELAY = 500;
@@ -193,7 +193,7 @@ export default function Explore() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05, duration: 0.3 }}
               >
-                <BubbleCard
+                                <OrganicBubble
                   bubble={bubble}
                   userId={user?.id || user?._id}
                   onOpen={(bubbleId) => navigate(`/bubble/${bubbleId}`)}
