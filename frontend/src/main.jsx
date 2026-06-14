@@ -17,6 +17,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App.jsx';
 import './index.css';
 import { AuthProvider } from './contexts/AuthContext.jsx';
@@ -26,22 +27,39 @@ import { TimeProvider } from './contexts/TimeContext.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 
 // ============================================================
+// TANSTACK QUERY — CLIENTE GLOBAL
+// Configuração padrão para toda a aplicação.
+// ============================================================
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,          // 30s até dados serem "velhos"
+      gcTime: 5 * 60_000,        // 5min no cache
+      refetchOnWindowFocus: true, // Refetch ao voltar para aba
+      retry: 2,                   // 2 tentativas antes de erro
+    },
+  },
+});
+
+// ============================================================
 // MONTAGEM DA APLICAÇÃO
 // ============================================================
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <AuthProvider>
-        <SocketProvider>
-          <ToastProvider>
-            <TimeProvider>
-              <BrowserRouter>
-                <App />
-              </BrowserRouter>
-            </TimeProvider>
-          </ToastProvider>
-        </SocketProvider>
-      </AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <SocketProvider>
+            <ToastProvider>
+              <TimeProvider>
+                <BrowserRouter>
+                  <App />
+                </BrowserRouter>
+              </TimeProvider>
+            </ToastProvider>
+          </SocketProvider>
+        </AuthProvider>
+      </QueryClientProvider>
     </ErrorBoundary>
   </React.StrictMode>
 );

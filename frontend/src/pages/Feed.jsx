@@ -1,203 +1,185 @@
-﻿// ============================================================
-// FEED - Mapa de pensamentos
+// ============================================================
+// FEED v2 — Grade de Pensamentos
 // Rota: /feed
-// Usa BubbleHUD para navegacao estilo bolha.
-// Mapa ocupa tela inteira (isFeed=true no HUD).
+//
+// Arquitetura:
+//   - TanStack Query (useInfiniteQuery) para paginação
+//   - Intersection Observer para infinite scroll
+//   - Grid responsivo: 1 col (mobile) | 2 col (tablet) | 3 col (desktop)
+//   - Skeleton loading estrutural (sem layout shift)
+//   - Componentes atômicos (Atomic Design)
 // ============================================================
 
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { AuthContext } from "../contexts/AuthContext";
-import { TimeContext } from "../contexts/TimeContext";
-import { useToast } from "../contexts/ToastContext";
-import BubbleHUD from "../components/BubbleHUD";
-import BubbleMap from "../components/BubbleMap";
-import api from "../services/api";
+import { useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { AuthContext } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import { useBubbles, useBubbleActions } from '../hooks/useBubbles';
+import BubbleHUD from '../components/BubbleHUD';
+import BubbleCard from '../components/bubbles/BubbleCard';
+import { FeedSkeleton } from '../components/skeletons/BubbleSkeleton';
 
 export default function Feed() {
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
-  const { timeNow } = useContext(TimeContext);
   const toast = useToast();
 
-  const [bubbles, setBubbles] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [mostrarPainel, setMostrarPainel] = useState(false);
+  // 🔥 Hooks de dados (TanStack Query)
+  const {
+    bubbles,
+    isLoading,
+    isError,
+    error,
+    hasNextPage,
+    isFetchingNextPage,
+    ref,
+  } = useBubbles();
 
-  const fetchBubbles = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.get("/bubbles");
-      setBubbles(res.data.bubbles || []);
-    } catch (err) {
-      toast.error("Não foi possível carregar as bolhas.");
-      setError("Nao foi possivel carregar as bolhas.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const {
+    likeBubble,
+    dislikeBubble,
+    soproBubble,
+    deleteBubble,
+    commentOnBubble,
+  } = useBubbleActions();
 
-  useEffect(() => {
-    fetchBubbles();
-  }, [fetchBubbles]);
+  // ============================================================
+  // HANDLERS
+  // ============================================================
+  const handleOpen = (bubbleId) => navigate(`/bubble/${bubbleId}`);
 
-  const handleBubbleClick = useCallback(
-    (bubbleId) => {
-      navigate(`/bubble/${bubbleId}`);
-    },
-    [navigate]
-  );
-
-  const minhasBolhas = useMemo(() => {
-    return bubbles
-      .filter((b) => b.author?._id === user?._id || b.author === user?._id)
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [bubbles, user]);
-
-  const formatTempo = (ms) => {
-    if (ms <= 0) return "Expirou";
-    const horas = Math.floor(ms / 3600000);
-    const minutos = Math.floor((ms % 3600000) / 60000);
-    if (horas > 0) return `${horas}h ${minutos}m`;
-    return `${minutos}m`;
+  const handleLike = (bubbleId) => {
+    try { likeBubble(bubbleId); }
+    catch { toast.error('Erro ao curtir'); }
   };
 
-  return (
-    <BubbleHUD>
-      {/* MAPA TELA INTEIRA */}
-      {bubbles.length > 0 ? (
-        <BubbleMap bubbles={bubbles} onBubbleClick={handleBubbleClick} />
-      ) : !loading && !error ? (
-        <div className="fixed inset-0 flex items-center justify-center z-10">
-          <div className="text-center">
+  const handleDislike = (bubbleId) => {
+    try { dislikeBubble(bubbleId); }
+    catch { toast.error('Erro ao dislikar'); }
+  };
+
+  const handleSopro = (bubbleId) => {
+    try { soproBubble(bubbleId); }
+    catch { toast.error('Erro ao soprar'); }
+  };
+
+  const handleDelete = (bubbleId) => {
+    try { deleteBubble(bubbleId); toast.success('Bolha estourada! 💥'); }
+    catch { toast.error('Erro ao deletar'); }
+  };
+
+  const handleComment = (bubbleId, text) => {
+    try { commentOnBubble(bubbleId, text); toast.success('Comentário adicionado!'); }
+    catch { toast.error('Erro ao comentar'); }
+  };
+
+  // ============================================================
+  // ESTADOS DE CARREGAMENTO
+  // ============================================================
+  if (isLoading) {
+    return (
+      <BubbleHUD>
+        <div className="max-w-7xl mx-auto">
+          <FeedSkeleton count={6} />
+        </div>
+      </BubbleHUD>
+    );
+  }
+
+  if (isError) {
+    return (
+      <BubbleHUD>
+        <div className="max-w-7xl mx-auto p-6">
+          <div className="rounded-3xl bg-rose-950/80 border border-rose-600/20 p-8 text-center">
+            <div className="text-4xl mb-3">💥</div>
+            <h2 className="text-xl font-bold text-white mb-2">Erro ao carregar bolhas</h2>
+            <p className="text-slate-400 text-sm mb-4">{error?.message || 'Tente novamente mais tarde.'}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2 rounded-full bg-gradient-to-r from-[#7c3aed] to-[#3b82f6] text-white font-bold text-sm hover:shadow-lg transition"
+            >
+              🔄 Tentar novamente
+            </button>
+          </div>
+        </div>
+      </BubbleHUD>
+    );
+  }
+
+  if (bubbles.length === 0) {
+    return (
+      <BubbleHUD>
+        <div className="max-w-7xl mx-auto p-6">
+          <div className="text-center py-20">
             <div className="text-8xl mb-6 animate-bubble-pulse">🫧</div>
             <h2 className="text-2xl font-black text-white mb-2">Nenhum pensamento ainda</h2>
             <p className="text-slate-500 text-sm mb-8">Seja o primeiro a soprar uma ideia na rede</p>
             <button
-              onClick={() => navigate("/create")}
-              className="px-6 py-3 rounded-full bg-gradient-to-r from-[#7c3aed] to-[#3b82f6] text-white font-bold text-base hover:shadow-lg hover:shadow-[#7c3aed]/30 transition-all"
+              onClick={() => navigate('/create')}
+              className="px-6 py-3 rounded-full bg-gradient-to-r from-[#7c3aed] to-[#3b82f6] text-white font-bold text-base hover:shadow-lg hover:shadow-[#7c3aed]/30 transition-all active:scale-95"
             >
               🫧 Criar primeiro pensamento
             </button>
           </div>
         </div>
-      ) : null}
+      </BubbleHUD>
+    );
+  }
 
-      {/* ============================================================
-          📋 DRAWER LATERAL DIREITO — MINHAS BOLHAS
-          ============================================================ */}
-      {minhasBolhas.length > 0 && (
-        <>
-          {/* FAB — Botão flutuante para abrir/fechar o drawer */}
-          <button
-            onClick={() => setMostrarPainel(!mostrarPainel)}
-            className={`fixed right-4 bottom-20 z-30 pointer-events-auto w-11 h-11 rounded-full shadow-lg backdrop-blur-md flex items-center justify-center transition-all duration-300 ${
-              mostrarPainel
-                ? 'bg-gradient-to-br from-[#7c3aed] to-[#3b82f6] text-white shadow-[#7c3aed]/30'
-                : 'bg-gradient-to-br from-slate-900/70 to-slate-950/70 border border-[#7c3aed]/25 text-slate-300 hover:border-[#3b82f6]/40 hover:text-white'
-            }`}
-            title="Minhas bolhas"
-          >
-            <span className="text-sm">{mostrarPainel ? '✕' : '📋'}</span>
-            {!mostrarPainel && (
-              <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-gradient-to-br from-[#7c3aed] to-[#3b82f6] text-white text-[8px] font-bold flex items-center justify-center shadow-lg">
-                {minhasBolhas.length}
-              </span>
-            )}
-          </button>
+  // ============================================================
+  // RENDER — GRADE RESPONSIVA
+  // ============================================================
+  return (
+    <BubbleHUD>
+      <div className="max-w-7xl mx-auto p-6">
+        {/* Grade responsiva: 1 → 2 → 3 colunas */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {bubbles.map((bubble) => (
+            <BubbleCard
+              key={bubble._id}
+              bubble={bubble}
+              userId={user?._id}
+              onLike={handleLike}
+              onDislike={handleDislike}
+              onSopro={handleSopro}
+              onDelete={handleDelete}
+              onComment={handleComment}
+              onOpen={handleOpen}
+            />
+          ))}
+        </div>
 
-          {/* Drawer animado com Framer Motion — slide-in da direita */}
-          <AnimatePresence>
-            {mostrarPainel && (
-              <motion.div
-                initial={{ opacity: 0, x: 80 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 80 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                className="fixed right-4 bottom-32 z-30 w-64 max-h-[65vh] overflow-y-auto pointer-events-auto"
-              >
-                <div className="rounded-2xl bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-[#7c3aed]/20 shadow-xl shadow-[#7c3aed]/10 backdrop-blur-xl p-4">
-                  {/* Cabeçalho do drawer */}
-                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800/60">
-                    <h3 className="text-[10px] font-bold text-[#a78bfa] uppercase tracking-wider">
-                      Minhas bolhas
-                    </h3>
-                    <span className="text-[10px] text-slate-500 bg-slate-800/50 px-2 py-0.5 rounded-full">
-                      {minhasBolhas.length}
-                    </span>
+        {/* ============================================================
+            SENTINEL — Intersection Observer para infinite scroll
+            Renderiza um skeleton sutil enquanto carrega próxima página
+            ============================================================ */}
+        <div ref={ref} className="mt-8">
+          {isFetchingNextPage && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-3xl p-6 bg-slate-900/70 border border-slate-800/60 animate-pulse">
+                  <div className="h-4 w-24 bg-slate-800 rounded-full mb-4" />
+                  <div className="h-6 w-3/4 bg-slate-800 rounded-lg mb-3" />
+                  <div className="h-4 w-full bg-slate-800/50 rounded-lg mb-1" />
+                  <div className="h-4 w-2/3 bg-slate-800/50 rounded-lg mb-4" />
+                  <div className="h-2 w-full bg-slate-800 rounded-full mb-4" />
+                  <div className="grid grid-cols-3 gap-2">
+                    {[1, 2, 3].map((j) => (
+                      <div key={j} className="h-9 bg-slate-800 rounded-xl" />
+                    ))}
                   </div>
-
-                  {/* Lista de bolhas com animação de entrada em stagger */}
-                  {minhasBolhas.map((bubble, index) => {
-                    const tempoRestante = new Date(bubble.expiresAt).getTime() - timeNow;
-                    const conexoes = (bubble.likes?.length || 0) + (bubble.sopros?.length || 0);
-                    const expirou = tempoRestante <= 0;
-
-                    return (
-                      <motion.button
-                        key={bubble._id}
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.04, duration: 0.25 }}
-                        onClick={() => {
-                          setMostrarPainel(false);
-                          handleBubbleClick(bubble._id);
-                        }}
-                        className="w-full text-left p-2.5 rounded-xl hover:bg-white/[0.04] transition-all group"
-                      >
-                        <div className="flex items-center gap-3">
-                          {/* Indicador de status (bolinha colorida) */}
-                          <div className={`relative w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-sm transition-transform group-hover:scale-125 ${
-                            expirou
-                              ? 'bg-slate-600'
-                              : conexoes > 5
-                                ? 'bg-[#7c3aed] shadow-[#7c3aed]/50'
-                                : conexoes > 0
-                                  ? 'bg-[#3b82f6] shadow-[#3b82f6]/50'
-                                  : 'bg-orange-400 shadow-orange-400/50'
-                          }`}>
-                            {conexoes > 0 && !expirou && (
-                              <span className="absolute inset-0 rounded-full animate-ping opacity-30"
-                                style={{ backgroundColor: conexoes > 5 ? '#7c3aed' : '#3b82f6' }}
-                              />
-                            )}
-                          </div>
-
-                          {/* Informações da bolha */}
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[12px] font-bold text-white truncate group-hover:text-[#a78bfa] transition-colors">
-                              {bubble.title || "..."}
-                            </p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-[9px] text-slate-500">
-                                {conexoes} {conexoes === 1 ? 'conexão' : 'conexões'}
-                              </span>
-                              {!expirou && (
-                                <>
-                                  <span className="text-[6px] text-slate-700">•</span>
-                                  <span className="text-[9px] text-slate-500">{formatTempo(tempoRestante)}</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Seta indicativa */}
-                          <span className="text-[10px] text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                            →
-                          </span>
-                        </div>
-                      </motion.button>
-                    );
-                  })}
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </>
-      )}
+              ))}
+            </div>
+          )}
+
+          {!hasNextPage && bubbles.length > 0 && (
+            <div className="text-center py-8 text-slate-500 text-sm">
+              🫧 Você viu todas as bolhas — por enquanto...
+            </div>
+          )}
+        </div>
+      </div>
     </BubbleHUD>
   );
 }
