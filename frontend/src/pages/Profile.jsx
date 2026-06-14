@@ -62,23 +62,35 @@ export default function Profile() {
   const [loadingBubbles, setLoadingBubbles] = useState(false);
   const [bubblesError, setBubblesError] = useState(null);
 
+      // 🔥 Ref para referência do topo do perfil
+  const profileTopRef = useRef(null);
+
   const isMyProfile = !username || username === currentUser?.username;
 
+  // 🔥 Reset completo ao trocar de perfil: limpa estado anterior e faz scroll ao topo
   useEffect(() => {
+    // Limpa dados imediatamente para evitar flash de conteúdo antigo
+    setProfileData(null);
+    setActiveTab('soprando');
+    setProfileBubbles([]);
+    setBubblesError(null);
+
     const fetchProfile = async () => {
       try {
-        // 🔥 Garantir que para perfis públicos passamos o username (não o _id)
-      const url = isMyProfile ? '/users/me' : `/users/${username}`;
+        const url = isMyProfile ? '/users/me' : `/users/${username}`;
         const res = await api.get(url);
         setProfileData(res.data);
         setBioText(res.data.user?.bio || '');
         setIsFollowing(res.data.user?.isFollowing || false);
+        // 🔥 Scroll suave para o topo da página
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch (err) {
         toast.error('Erro ao carregar perfil');
       }
     };
     fetchProfile();
-  }, [username, isMyProfile]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [username]);
 
   const fetchProfileBubbles = useCallback(async () => {
     if (!profileData?.user?._id) return;
@@ -217,9 +229,9 @@ export default function Profile() {
   const coverImage = user?.coverUrl || null;
   const avatarImage = user?.avatarUrl || null;
 
-  return (
+    return (
     <BubbleHUD>
-      <div className="max-w-2xl mx-auto pb-32 space-y-6">
+      <div ref={profileTopRef} className="max-w-2xl mx-auto pb-32 space-y-6">
         {/* CARD DO PERFIL */}
         <div className="relative rounded-3xl bg-slate-900/50 border border-slate-800/80 overflow-hidden">
           {/* Capa com gradiente roxo/azul */}
@@ -276,31 +288,31 @@ export default function Profile() {
             <h1 className="text-2xl font-black text-white mb-1">@{user.username}</h1>
             <p className="text-slate-400 text-sm mb-4 max-w-xs mx-auto">{user.bio || '✨ Sem bio ainda...'}</p>
 
-            <div className="flex justify-center gap-6 mb-5">
-              <div className="text-center">
+                        <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mb-5">
+              <div className="text-center min-w-[80px]">
                 <div className="text-xl font-bold text-white">{user.followerCount || 0}</div>
                 <div className="text-[10px] text-slate-500 uppercase tracking-wider">Seguidores</div>
               </div>
-              <div className="w-px h-8 bg-slate-700/50" />
-              <div className="text-center">
+              <div className="w-px h-8 bg-slate-700/50 self-center" />
+              <div className="text-center min-w-[80px]">
                 <div className="text-xl font-bold text-white">{user.followingCount || 0}</div>
                 <div className="text-[10px] text-slate-500 uppercase tracking-wider">Seguindo</div>
               </div>
-              <div className="w-px h-8 bg-slate-700/50" />
-              <div className="text-center">
+              <div className="w-px h-8 bg-slate-700/50 self-center" />
+              <div className="text-center min-w-[80px]">
                 <div className="text-xl font-bold text-white">{user.bubblesCreated || 0}</div>
                 <div className="text-[10px] text-slate-500 uppercase tracking-wider">Bolhas</div>
               </div>
             </div>
 
-            {isMyProfile ? (
-              <button onClick={() => setEditProfileModal(true)} className="mb-5 px-5 py-2 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 text-sm font-medium hover:bg-slate-700 transition">
+                        {isMyProfile ? (
+              <button onClick={() => setEditProfileModal(true)} className="mb-5 min-w-[140px] h-[38px] px-5 py-2 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 text-sm font-medium hover:bg-slate-700 transition whitespace-nowrap">
                 ✏️ Editar perfil
               </button>
             ) : (
               <button
                 onClick={handleFollowToggle}
-                className={`mb-5 px-6 py-2 rounded-full text-sm font-bold transition ${isFollowing ? 'bg-slate-800/80 border border-slate-700 text-slate-300' : 'bg-gradient-to-r from-[#7c3aed] to-[#3b82f6] text-white shadow-md shadow-[#7c3aed]/20'}`}
+                className={`mb-5 min-w-[140px] h-[38px] px-5 py-2 rounded-full text-sm font-bold transition whitespace-nowrap ${isFollowing ? 'bg-slate-800/80 border border-slate-700 text-slate-300' : 'bg-gradient-to-r from-[#7c3aed] to-[#3b82f6] text-white shadow-md shadow-[#7c3aed]/20'}`}
               >
                 {isFollowing ? '✓ Seguindo' : '+ Seguir'}
               </button>
@@ -361,21 +373,21 @@ export default function Profile() {
           <div className="mt-4 rounded-2xl bg-rose-950/80 border border-rose-600/20 px-4 py-3 text-sm text-rose-200">{bubblesError}</div>
         )}
 
-        {/* ABAS */}
+                {/* ABAS — com largura mínima fixa para evitar "espichamento" */}
         <div className="mb-2">
-          <div className="flex gap-1 bg-slate-900/50 rounded-2xl p-1 border border-slate-800/50">
+          <div className="flex gap-1 bg-slate-900/50 rounded-2xl p-1 border border-slate-800/50 overflow-x-auto">
             {TABS.map((tab) => {
               const count = tab.id === 'soprando' ? activeBubbles?.length || 0 : tab.id === 'estouradas' ? expiredBubbles.length : tab.id === 'populares' ? popularBubbles.length : recentBubbles.length;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === tab.id ? 'bg-gradient-to-r from-[#7c3aed] to-[#3b82f6] text-white shadow-md shadow-[#7c3aed]/20' : 'text-slate-400 hover:text-slate-200'}`}
+                  className={`flex-1 min-w-0 flex items-center justify-center gap-1 py-2.5 px-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-gradient-to-r from-[#7c3aed] to-[#3b82f6] text-white shadow-md shadow-[#7c3aed]/20' : 'text-slate-400 hover:text-slate-200'}`}
                 >
-                  <span className="text-base">{tab.label}</span>
-                  <span className="text-xs">{tab.name}</span>
+                  <span className="text-base shrink-0">{tab.label}</span>
+                  <span className="text-xs truncate">{tab.name}</span>
                   {count > 0 && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'}`}>
                       {count}
                     </span>
                   )}
@@ -385,8 +397,8 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* CONTEÚDO DAS ABAS */}
-        <div className="space-y-3">
+                {/* CONTEÚDO DAS ABAS — min-h evita "pulo" ao trocar entre abas vazias */}
+        <div className="space-y-3 min-h-[200px]">
           {/* Aba: Ativas */}
           {activeTab === 'soprando' && (activeBubbles?.length > 0 ? (
             activeBubbles.map((bubble) => (
