@@ -1,37 +1,28 @@
 // ============================================================
 // BOLHA - REDE SOCIAL EFÊMERA
 // Arquivo: middlewares/uploadMiddleware.js
-// Propósito: Interceptação Segura de Multipart Form-Data (Sênior)
+// Propósito: Interceptação Segura de Multipart Form-Data + Cloudinary
 // ============================================================
 
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
-
-const UPLOAD_DIR = path.join(__dirname, '../uploads');
-
-// Sênior: Inicialização assíncrona/imediata da pasta de uploads.
-// É executado apenas uma vez quando o processo do servidor sobe, garantindo que o disco esteja pronto.
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
+const cloudinary = require('cloudinary').v2;
 
 // ============================================================
-// CONFIGURAÇÃO DE ARMAZENAMENTO EM DISCO
+// CONFIGURAÇÃO DO CLOUDINARY
+// As variáveis CLOUDINARY_* devem estar definidas no .env
 // ============================================================
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, UPLOAD_DIR);
-  },
-  filename: (req, file, cb) => {
-    // Sênior: Limpa caracteres especiais do nome original (higienização contra caminhos maliciosos)
-    const cleanedOriginalName = file.originalname.replace(/[^a-zA-Z0-9.]/g, '');
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    
-    // Concatena o sufixo único garantindo que a extensão original permaneça em letras minúsculas
-    cb(null, `${uniqueSuffix}-${cleanedOriginalName}`);
-  }
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
+
+// ============================================================
+// STORAGE EM MEMÓRIA (Substitui diskStorage)
+// O buffer do arquivo fica em req.file.buffer para upload ao Cloudinary
+// ============================================================
+const storage = multer.memoryStorage();
 
 // ============================================================
 // FILTRO DE SEGURANÇA MULTI-CAMADA (MIME + EXTENSÃO)
@@ -39,7 +30,6 @@ const storage = multer.diskStorage({
 const fileFilter = (req, file, cb) => {
   const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
   
-  // Sênior: Validação defensiva dupla. Checa o MimeType E valida a extensão real do arquivo via Regex.
   const allowedExtensions = /\.(jpg|jpeg|png|gif|webp)$/i;
   const isExtensionValid = allowedExtensions.test(path.extname(file.originalname));
   const isMimeTypeValid = allowedMimeTypes.includes(file.mimetype);
@@ -48,7 +38,6 @@ const fileFilter = (req, file, cb) => {
     return cb(null, true);
   }
 
-  // Passamos um erro customizado para o Multer interceptar
   return cb(new multer.MulterError('LIMIT_UNEXPECTED_FILE', file.fieldname), false);
 };
 
@@ -59,40 +48,108 @@ const uploadConfig = multer({
   storage, 
   fileFilter,
   limits: { 
-    fileSize: 5 * 1024 * 1024, // Limite físico estrito de 5MB por imagem
-    files: 1 // Permite o upload de apenas 1 arquivo por requisição nessa rota (evita spam de I/O)
+    fileSize: 5 * 1024 * 1024, // Limite físico de 5MB
+    files: 1
   }
 });
 
 // ============================================================
-// WRAPPER SÊNIOR: INTERCEPTADOR DE ERROS DO MULTER
-// Traduz falhas de baixo nível do Multer para respostas limpas (400/413)
+// HELPER: UPLOAD DO BUFFER PARA O CLOUDINARY
+// Retorna a URL segura (https) do arquivo hospedado
 // ============================================================
-const handleSingleUpload = (fieldName) => {
+const uploadToCloudinary = (fileBuffer, folder) => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: `bolha/${folder}`,
+        resource_type: 'auto',
+        transformation: [
+          { quality: 'auto:good' },
+          { fetch_format: 'auto' }
+        ]
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
+
+    uploadStream.end(fileBuffer);
+  });
+};
+
+// ============================================================
+// HELPER: DELETAR ARQUIVO DO CLOUDINARY POR URL
+// ============================================================
+const deleteFromCloudinary = async (url) => {
+  if (!url || !url.includes('res.cloudinary.com')) return;
+
+  try {
+    // Extrai o public_id da URL do Cloudinary
+    // Formato: https://res.cloudinary.com/<cloud>/image/upload/v123/bolha/<folder>/<filename>.ext
+    const parts = url.split('/');
+    const uploadIdx = parts.indexOf('upload');
+    if (uploadIdx === -1) return;
+
+    // Pega tudo depois de "upload/" e antes da extensão
+    const pathWithVersion = parts.slice(uploadIdx + 1).join('/');
+    // Remove versão (v1234567/) se presente
+    const publicId = pathWithVersion.replace(/^v\d+\//, '').replace(/\.[^.]+$/, '');
+
+    await cloudinary.uploader.destroy(publicId);
+  } catch (error) {
+    // Não quebra a requisição se a deleção falhar
+    console.warn('Falha ao deletar arquivo do Cloudinary:', { url, error: error.message });
+  }
+};
+
+// ============================================================
+// WRAPPER SÊNIOR: INTERCEPTADOR DE ERROS DO MULTER + CLOUDINARY
+// Traduz falhas do Multer e Cloudinary para respostas limpas
+// ============================================================
+const handleSingleUpload = (fieldName, folder) => {
   const uploadMiddleware = uploadConfig.single(fieldName);
 
   return (req, res, next) => {
-    uploadMiddleware(req, res, (err) => {
-      if (!err) return next();
-
-      // Tratamento customizado de erros específicos do Multer
-      if (err instanceof multer.MulterError) {
-        if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(413).json({ message: 'Arquivo grande demais. O limite máximo permitido é 5MB.' });
+    uploadMiddleware(req, res, async (err) => {
+      if (err) {
+        if (err instanceof multer.MulterError) {
+          if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(413).json({ message: 'Arquivo grande demais. O limite máximo permitido é 5MB.' });
+          }
+          if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+            return res.status(400).json({ message: 'Formato inválido. Apenas mídias JPG, JPEG, PNG, GIF ou WEBP são permitidas.' });
+          }
+          return res.status(400).json({ message: `Erro no upload do arquivo: ${err.message}` });
         }
-        if (err.code === 'LIMIT_UNEXPECTED_FILE') {
-          return res.status(400).json({ message: 'Formato inválido. Apenas mídias JPG, JPEG, PNG, GIF ou WEBP são permitidas.' });
-        }
-        return res.status(400).json({ message: `Erro no upload do arquivo: ${err.message}` });
+        return next(err);
       }
 
-      // Repassa erros desconhecidos para o fluxo centralizador da API
-      return next(err);
+      // Se não veio arquivo, segue o fluxo normal
+      if (!req.file) return next();
+
+      try {
+        // Faz o upload do buffer em memória para o Cloudinary
+        const result = await uploadToCloudinary(req.file.buffer, folder);
+
+        // Enriquece req.file com dados do Cloudinary para uso nos controllers
+        req.file.cloudinaryUrl = result.secure_url;
+        req.file.cloudinaryPublicId = result.public_id;
+
+        return next();
+      } catch (uploadError) {
+        return res.status(500).json({ message: 'Erro ao enviar arquivo para a nuvem. Tente novamente.' });
+      }
     });
   };
 };
 
 module.exports = {
-  uploadAvatar: handleSingleUpload('avatar'),
-  uploadCover: handleSingleUpload('cover')
+  // uploadAvatar: para avatares de usuário (pasta "avatars")
+  uploadAvatar: handleSingleUpload('avatar', 'avatars'),
+  // uploadCover: para capas de bubbles e de usuário (pasta "covers")
+  uploadCover: handleSingleUpload('cover', 'covers'),
+  // Utilitários expostos para uso em controllers
+  cloudinary,
+  deleteFromCloudinary,
 };

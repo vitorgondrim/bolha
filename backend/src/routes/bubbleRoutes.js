@@ -12,7 +12,7 @@ const bubbleController = require('../controllers/bubbleController');
 const { protect, optionalAuth } = require('../middlewares/authMiddleware');
 const { bubbleExistsAndAlive } = require('../middlewares/bubbleMiddleware');
 const { limits } = require('../middlewares/rateLimitPerUser');
-const { validateBubble, validateComment } = require('../middlewares/sanitizeInput');
+const { validateComment } = require('../middlewares/sanitizeInput');
 
 // Sênior: Importamos os wrappers tratados do Multer para evitar quebras brutas de disco
 const { uploadCover } = require('../middlewares/uploadMiddleware');
@@ -32,7 +32,7 @@ router.get('/leaked', optionalAuth, bubbleController.getLeakedBubbles);
 // ============================================================
 
 // Criar Bolha: Rate Limiter -> Processamento de arquivo seguro com tratamento -> Validação -> Controller
-router.post('/', protect, limits.bubbleCreation, uploadCover, validateBubble, bubbleController.createBubble);
+router.post('/', protect, limits.bubbleCreation, uploadCover, bubbleController.createBubble);
 
 // Minhas Bolhas: Histórico de bolhas do próprio usuário (vivas e estouradas de até 7 dias)
 router.get('/my', protect, bubbleController.getMyBubbles);

@@ -1,10 +1,9 @@
 // ============================================================
-// FEED v6 — MENTE COLETIVA (GESTÃO DE DENSIDADE ESPACIAL)
+// FEED v7 — MENTE COLETIVA (GESTÃO DE DENSIDADE + REACT-WINDOW)
 // Rota: /feed
 //
-// Conceito: Canvas neural com bolhas vivas, porém com
-//           inteligência de densidade para evitar poluição
-//           visual conforme o volume cresce.
+// Conceito: Canvas neural com bolhas vivas, com virtualização
+//           via react-window (FixedSizeList) para reduzir DOM.
 //
 // Módulos de densidade:
 //   1. GRAVIDADE: heatIndex dita distância do centro
@@ -12,18 +11,16 @@
 //   3. PROFUNDIDADE: blur() variável por distância do centro
 //   4. RENDERIZAÇÃO DE JANELA: oculta bolhas frias quando > X
 //
-// Características:
-//   - Space canvas com nebulosas + estrelas
-//   - Bolhas com backdrop-filter: blur sem bg sólido
-//   - Layout gravitacional com verificação anti-colisão
-//   - Blur de profundidade (periferia borrada)
-//   - Corte de densidade (maxBubblesVisible)
-//   - Feed infinito sem scrollbar visível
+// Virtualização:
+//   - FixedSizeList gerencia o DOM, renderizando apenas itens
+//     próximos ao viewport (overscanCount)
+//   - Cada item é posicionado absolutamente via coords espaciais
 // ============================================================
 
 import { useContext, useMemo, useCallback, useRef, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { FixedSizeList as List } from 'react-window';
 import { AuthContext } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useBubbles, useBubbleActions } from '../hooks/useBubbles';
@@ -46,8 +43,11 @@ const MAX_DEPTH_BLUR = 6;
 /** Fator de escala mínimo na periferia */
 const MIN_PERIPHERY_SCALE = 0.35;
 
-/** Raio das camadas de anéis concêntricos para distribuição */
-const RING_LAYERS = 5;
+/** Altura fixa de cada item no FixedSizeList (px) */
+const LIST_ITEM_SIZE = 120;
+
+/** Overscan: quantos itens acima/abaixo do viewport manter no DOM */
+const OVERSCAN_COUNT = 8;
 
 // ═══════════════════════════════════════════════════════════════
 // FUNÇÕES AUXILIARES DE HIERARQUIA VISUAL ORGÂNICA
@@ -65,19 +65,6 @@ const getBubbleHeat = (bubble) => {
 };
 
 /**
- * Gera ângulos均匀 em espiral de Fibonacci (golden angle)
- * para distribuir N pontos em um círculo sem aglomeração.
- */
-const generateFibonacciOrbits = (count) => {
-  const goldenAngle = Math.PI * (3 - Math.sqrt(5)); // ~137.5°
-  const orbits = [];
-  for (let i = 0; i < count; i++) {
-    orbits.push(i * goldenAngle);
-  }
-  return orbits;
-};
-
-/**
  * Detecção de colisão simples entre duas bolhas.
  * Retorna true se os círculos estiverem sobrepostos (com padding).
  */
@@ -90,20 +77,11 @@ const circlesOverlap = (x1, y1, r1, x2, y2, r2) => {
 
 /**
  * Circle Packing: realoca bolhas que colidem.
- * Recebe um array de { x, y, radius } e retorna posições realocadas.
- *
- * Estratégia:
- *   - Bolhas mais quentes (maiores) são posicionadas primeiro
- *   - Se uma bolha colide, tenta-se deslocar radialmente para fora
- *   - Se mesmo assim colidir, move-se para o próximo anel
  */
 const resolveCollisions = (bubbles) => {
   if (bubbles.length <= 1) return bubbles;
 
-  // Ordena por raio (maiores primeiro) para que bolhas grandes
-  // ditem a posição e as pequenas se ajustem
   const sorted = [...bubbles].sort((a, b) => b.radius - a.radius);
-
   const placed = [];
 
   for (const bubble of sorted) {
@@ -113,7 +91,6 @@ const resolveCollisions = (bubbles) => {
     let attempts = 0;
     const maxAttempts = 30;
 
-    // Tenta realocar até não colidir ou estourar tentativas
     do {
       collides = false;
       for (const placedBubble of placed) {
@@ -124,7 +101,6 @@ const resolveCollisions = (bubbles) => {
       }
 
       if (collides) {
-        // Desloca radialmente para fora (aumenta distância do centro)
         const angle = Math.atan2(y, x);
         const currentDist = Math.sqrt(x * x + y * y);
         const newDist = currentDist + currentDist * 0.15 + r * 0.3;
@@ -142,51 +118,31 @@ const resolveCollisions = (bubbles) => {
 
 /**
  * Computa propriedades espaciais — GRAVIDADE + COLISÃO + PROFUNDIDADE
- *
- * Retorna:
- *   _scale, _opacity, _zIndex, _glowIntensity
- *   _orbit, _distance
- *   _depthBlur: blur em px baseado na distância do centro
- *   _posX, _posY: posição final em % da viewport (após circle packing)
- *   _visible: se a bolha deve ser renderizada (janela de densidade)
  */
 const computeSpatialProps = (allBubbles, heats, maxBubbles) => {
   const maxHeat = Math.max(...heats, 1);
-  const total = allBubbles.length;
 
-  // ─── 1. Calcular heat normalizado e propriedades base ───
   const rawProps = allBubbles.map((bubble, index) => {
     const heat = heats[index];
-    const normalized = heat / maxHeat; // [0, 1]
+    const normalized = heat / maxHeat;
 
-    // GRAVIDADE: bolhas quentes → centro, frias → periferia
     const distance = 0.10 + Math.pow(1 - normalized, 1.5) * 0.80;
-
-    // Distribuição angular usando Fibonacci (mais natural que espiral simples)
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
     const orbit = index * goldenAngle;
-
-    // Escala base
     const scale = 0.50 + normalized * 1.0;
-
-    // Raio em % da viewport (inferido da escala)
     const radius = (0.50 + normalized * 0.70) * 5;
 
-    // Posição inicial no círculo (antes de circle packing)
     const centerX = 50;
     const centerY = 45;
     const rawX = Math.cos(orbit) * distance * 38;
     const rawY = Math.sin(orbit) * distance * 28;
 
-    // PROFUNDIDADE: blur aumenta com a distância do centro
-    const distFromCenter = Math.sqrt(rawX * rawX + rawY * rawY) / 38; // normalizado [0,1]
+    const distFromCenter = Math.sqrt(rawX * rawX + rawY * rawY) / 38;
     const depthBlur = Math.pow(distFromCenter, 1.8) * MAX_DEPTH_BLUR;
 
-    // Opacidade: cai com a distância (bolhas frias + distantes = mais transparentes)
     const distanceOpacity = 1.0 - Math.pow(distFromCenter, 1.5) * 0.6;
     const opacity = (0.25 + normalized * 0.75) * distanceOpacity;
 
-    // Escala com profundidade: periferia encolhe
     const depthScale = 1.0 - Math.pow(distFromCenter, 2) * (1 - MIN_PERIPHERY_SCALE);
     const finalScale = scale * depthScale;
 
@@ -202,7 +158,6 @@ const computeSpatialProps = (allBubbles, heats, maxBubbles) => {
       _depthBlur: depthBlur,
       _index: index,
       _color: getHeatColor(normalized),
-      // Posição em coordenadas de viewport (%) para circle packing
       x: rawX,
       y: rawY,
       radius: radius * depthScale,
@@ -213,27 +168,20 @@ const computeSpatialProps = (allBubbles, heats, maxBubbles) => {
     };
   });
 
-  // ─── 2. CIRCLE PACKING: resolver colisões ───
   const resolvedPositions = resolveCollisions(rawProps);
 
-  // ─── 3. RENDERIZAÇÃO DE JANELA: podar bolhas frias se > MAX ───
   let visibleCount = resolvedPositions.length;
-  let hiddenThreshold = -1; // abaixo deste heat, esconde
+  let hiddenThreshold = -1;
 
-  if (resolvedPositions.length > MAX_BUBBLES_VISIBLE) {
-    // Ordena por heat para encontrar o threshold
+  if (resolvedPositions.length > maxBubbles) {
     const sortedByHeat = [...resolvedPositions].sort((a, b) => b._heat - a._heat);
-    hiddenThreshold = sortedByHeat[MAX_BUBBLES_VISIBLE - 1]._heat;
-    visibleCount = MAX_BUBBLES_VISIBLE;
+    hiddenThreshold = sortedByHeat[maxBubbles - 1]._heat;
+    visibleCount = maxBubbles;
   }
 
-  // ─── 4. Montar resultado final ───
   return resolvedPositions.map((item) => {
-    // Posição final em % da viewport (com translate -50%)
     const posX = 50 + item.x;
     const posY = 45 + item.y;
-
-    // Visibilidade: se heat está abaixo do threshold, oculta
     const visible = hiddenThreshold < 0 || item._heat >= hiddenThreshold;
 
     return {
@@ -250,13 +198,103 @@ const computeSpatialProps = (allBubbles, heats, maxBubbles) => {
 
 /**
  * Mapeia intensidade de glow para cor dominante da bolha.
- * Dourado → quente, Roxo → médio, Azul → frio.
  */
 const getHeatColor = (intensity) => {
   if (intensity > 0.75) return { rgb: '245, 158, 11', name: 'dourado' };
   if (intensity > 0.45) return { rgb: '124, 58, 237', name: 'roxo' };
   if (intensity > 0.2) return { rgb: '59, 130, 246', name: 'azul' };
   return { rgb: '6, 182, 212', name: 'ciano' };
+};
+
+// ═══════════════════════════════════════════════════════════════
+// COMPONENTE DE ITEM — renderizado pelo react-window
+// ═══════════════════════════════════════════════════════════════
+
+const BubbleItem = ({ bubble, style, user, onLike, onDislike, onSopro, onDelete, onComment, onOpen }) => {
+  return (
+    <motion.div
+      layout
+      initial={{ scale: 0, opacity: 0 }}
+      animate={{
+        scale: bubble._scale,
+        opacity: bubble._opacity,
+        left: `${bubble._posX}%`,
+        top: `${bubble._posY}%`,
+        x: '-50%',
+        y: '-50%',
+        filter: `blur(${bubble._depthBlur}px)`,
+      }}
+      exit={{
+        scale: 0,
+        opacity: 0,
+        filter: 'blur(0px)',
+        transition: { duration: 0.6, ease: 'easeInOut' },
+      }}
+      transition={{
+        layout: { type: 'spring', stiffness: 60, damping: 15 },
+        scale: { duration: 1.0, ease: [0.34, 1.56, 0.64, 1] },
+        opacity: { duration: 0.8 },
+        left: { duration: 1.2, ease: 'easeOut' },
+        top: { duration: 1.2, ease: 'easeOut' },
+        filter: { duration: 1.0, ease: 'easeOut' },
+      }}
+      className="absolute will-change-transform"
+      style={{ zIndex: bubble._zIndex, ...style }}
+    >
+      <motion.div
+        className="relative"
+        animate={{
+          y: [0, -10, 0, -6, 0],
+          rotate: [0, 0.5, 0, -0.3, 0],
+        }}
+        transition={{
+          y: {
+            duration: 5 + (bubble._index % 4) * 1.2,
+            repeat: Infinity,
+            ease: 'easeInOut',
+            delay: bubble._floatDelay,
+          },
+          rotate: {
+            duration: 8 + (bubble._index % 6) * 0.8,
+            repeat: Infinity,
+            ease: 'easeInOut',
+            delay: bubble._driftDelay,
+          },
+        }}
+      >
+        {bubble._glowIntensity > 0.7 && (
+          <motion.div
+            className="absolute inset-0 rounded-full pointer-events-none"
+            animate={{
+              scale: [1, 1.15, 1],
+              opacity: [0.3, 0, 0.3],
+            }}
+            transition={{
+              duration: 2.5,
+              repeat: Infinity,
+              ease: 'easeOut',
+              delay: bubble._index * 0.2,
+            }}
+            style={{
+              boxShadow: `0 0 15px rgba(${bubble._color.rgb}, 0.3)`,
+            }}
+          />
+        )}
+
+        <OrganicBubble
+          bubble={bubble}
+          userId={user?._id}
+          glowIntensity={bubble._glowIntensity}
+          onLike={onLike}
+          onDislike={onDislike}
+          onSopro={onSopro}
+          onDelete={onDelete}
+          onComment={onComment}
+          onOpen={onOpen}
+        />
+      </motion.div>
+    </motion.div>
+  );
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -267,9 +305,17 @@ export default function Feed() {
   const { user } = useContext(AuthContext);
   const toast = useToast();
   const canvasRef = useRef(null);
+  const listRef = useRef(null);
 
-  // Estado para controlar a densidade (pode ser ajustado dinamicamente)
   const [maxVisible, setMaxVisible] = useState(MAX_BUBBLES_VISIBLE);
+  const [viewportHeight, setViewportHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
+
+  // Atualiza viewportHeight no resize
+  useEffect(() => {
+    const handleResize = () => setViewportHeight(window.innerHeight);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const {
     bubbles,
@@ -289,7 +335,6 @@ export default function Feed() {
     commentOnBubble,
   } = useBubbleActions();
 
-  // Marca o body como feed ativo (remove scrollbar, fundo imersivo)
   useEffect(() => {
     document.body.classList.add('feed-active');
     return () => document.body.classList.remove('feed-active');
@@ -361,6 +406,28 @@ export default function Feed() {
     },
     [commentOnBubble, toast]
   );
+
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER — ITEM DO REACT-WINDOW (wrapper com props do contexto)
+  // ═══════════════════════════════════════════════════════════════
+  const Row = useCallback(({ index, style }) => {
+    const bubble = visibleBubbles[index];
+    if (!bubble) return null;
+
+    return (
+      <BubbleItem
+        bubble={bubble}
+        style={style}
+        user={user}
+        onLike={handleLike}
+        onDislike={handleDislike}
+        onSopro={handleSopro}
+        onDelete={handleDelete}
+        onComment={handleComment}
+        onOpen={handleOpen}
+      />
+    );
+  }, [visibleBubbles, user, handleLike, handleDislike, handleSopro, handleDelete, handleComment, handleOpen]);
 
   // ═══════════════════════════════════════════════════════════════
   // ESTADOS DE CARREGAMENTO
@@ -475,7 +542,7 @@ export default function Feed() {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // RENDER — CANVAS ESPACIAL COM GESTÃO DE DENSIDADE
+  // RENDER — CANVAS ESPACIAL COM REACT-WINDOW (FIXEDSIZELIST)
   // ═══════════════════════════════════════════════════════════════
   return (
     <BubbleHUD>
@@ -487,105 +554,25 @@ export default function Feed() {
         <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-[#f59e0b]/2 rounded-full blur-[150px] animate-nebula-pulse" style={{ animationDuration: '18s', animationDelay: '6s' }} />
       </div>
 
-      {/* ─── CAMPO DE CONSTELAÇÃO ─── */}
+      {/* ─── CAMPO DE CONSTELAÇÃO (REACT-WINDOW) ─── */}
       <div
         ref={canvasRef}
         className="relative z-10 w-screen h-screen overflow-hidden"
         style={{ perspective: '1200px' }}
       >
         <AnimatePresence mode="popLayout">
-          {visibleBubbles.map((bubble) => (
-            <motion.div
-              key={bubble._id}
-              layout
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{
-                scale: bubble._scale,
-                opacity: bubble._opacity,
-                left: `${bubble._posX}%`,
-                top: `${bubble._posY}%`,
-                x: '-50%',
-                y: '-50%',
-                // PROFUNDIDADE: blur variável por distância do centro
-                filter: `blur(${bubble._depthBlur}px)`,
-              }}
-              exit={{
-                scale: 0,
-                opacity: 0,
-                filter: 'blur(0px)',
-                transition: { duration: 0.6, ease: 'easeInOut' },
-              }}
-              transition={{
-                layout: {
-                  type: 'spring',
-                  stiffness: 60,
-                  damping: 15,
-                },
-                scale: { duration: 1.0, ease: [0.34, 1.56, 0.64, 1] },
-                opacity: { duration: 0.8 },
-                left: { duration: 1.2, ease: 'easeOut' },
-                top: { duration: 1.2, ease: 'easeOut' },
-                filter: { duration: 1.0, ease: 'easeOut' },
-              }}
-              className="absolute will-change-transform"
-              style={{ zIndex: bubble._zIndex }}
-            >
-              {/* Flutuação individual (senoidal 3D) */}
-              <motion.div
-                className="relative"
-                animate={{
-                  y: [0, -10, 0, -6, 0],
-                  rotate: [0, 0.5, 0, -0.3, 0],
-                }}
-                transition={{
-                  y: {
-                    duration: 5 + (bubble._index % 4) * 1.2,
-                    repeat: Infinity,
-                    ease: 'easeInOut',
-                    delay: bubble._floatDelay,
-                  },
-                  rotate: {
-                    duration: 8 + (bubble._index % 6) * 0.8,
-                    repeat: Infinity,
-                    ease: 'easeInOut',
-                    delay: bubble._driftDelay,
-                  },
-                }}
-              >
-                {/* Anel de sinalização para bolhas muito quentes */}
-                {bubble._glowIntensity > 0.7 && (
-                  <motion.div
-                    className="absolute inset-0 rounded-full pointer-events-none"
-                    animate={{
-                      scale: [1, 1.15, 1],
-                      opacity: [0.3, 0, 0.3],
-                    }}
-                    transition={{
-                      duration: 2.5,
-                      repeat: Infinity,
-                      ease: 'easeOut',
-                      delay: bubble._index * 0.2,
-                    }}
-                    style={{
-                      boxShadow: `0 0 15px rgba(${bubble._color.rgb}, 0.3)`,
-                    }}
-                  />
-                )}
-
-                <OrganicBubble
-                  bubble={bubble}
-                  userId={user?._id}
-                  glowIntensity={bubble._glowIntensity}
-                  onLike={handleLike}
-                  onDislike={handleDislike}
-                  onSopro={handleSopro}
-                  onDelete={handleDelete}
-                  onComment={handleComment}
-                  onOpen={handleOpen}
-                />
-              </motion.div>
-            </motion.div>
-          ))}
+          <List
+            ref={listRef}
+            height={viewportHeight}
+            width="100%"
+            itemCount={visibleBubbles.length}
+            itemSize={LIST_ITEM_SIZE}
+            overscanCount={OVERSCAN_COUNT}
+            style={{ overflow: 'visible' }}
+            className="absolute inset-0"
+          >
+            {Row}
+          </List>
         </AnimatePresence>
 
         {/* ─── INDICADOR DE DENSIDADE (visível só quando > MAX) ─── */}
@@ -633,8 +620,6 @@ export default function Feed() {
             </div>
           </motion.div>
         )}
-
-        {/* ─── SEM "fim de feed" — a constelação se expande infinitamente ─── */}
       </div>
     </BubbleHUD>
   );

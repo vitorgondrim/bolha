@@ -14,6 +14,7 @@ const { resetDailySoprosIfNeeded } = require('../utils/soproUtils');
 const { injectOxygen } = require('../services/bubbleService');
 const logger = require('../utils/logger');
 const { deleteOldFile } = require('./uploadController');
+const { bubbleSchema } = require('../../../shared/schemas/bubbleSchema');
 
 const LEAK_SCORE_THRESHOLD = parseInt(process.env.LEAK_SCORE_THRESHOLD, 10) || 12;
 
@@ -76,28 +77,35 @@ const updateSurvivorRecord = async (user, bubble) => {
 // ============================================================
 exports.createBubble = async (req, res, next) => {
   try {
-    const { title, subject, content, mediaUrl, mediaType, parentBubble, isAnonymous = false } = req.body;
-    
-    if (!title || !title.trim()) {
-      return res.status(400).json({ message: 'O título da bolha é obrigatório.' });
+    const { mediaUrl, mediaType, parentBubble } = req.body;
+
+    const parsed = bubbleSchema.safeParse({
+      title: req.body.title,
+      content: req.body.content,
+      subject: req.body.subject,
+      isAnonymous: req.body.isAnonymous,
+    });
+
+    if (!parsed.success) {
+      const errors = parsed.error.issues.map(i => ({
+        field: i.path.join('.'),
+        message: i.message,
+      }));
+      return res.status(422).json({ success: false, errors });
     }
-    if (!content || !content.trim()) {
-      return res.status(400).json({ message: 'O conteúdo não pode estar vazio.' });
-    }
-    if (title.length > 60) {
-      return res.status(400).json({ message: 'Título: máximo 60 caracteres.' });
-    }
-    
+
+    const { title, content, subject, isAnonymous } = parsed.data;
+
     const bubbleData = {
-      title: title.trim(),
-      subject: subject?.trim() || 'Geral',
-      content: content.trim(),
+      title,
+      subject: subject || 'Geral',
+      content,
       author: req.user._id,
-      isAnonymous
+      isAnonymous,
     };
     
-    if (req.file) {
-      bubbleData.mediaUrl = `/uploads/${req.file.filename}`;
+    if (req.file && req.file.cloudinaryUrl) {
+      bubbleData.mediaUrl = req.file.cloudinaryUrl;
       bubbleData.mediaType = req.file.mimetype.includes('gif') ? 'gif' : 'image';
     } else if (mediaUrl && mediaUrl.trim()) {
       bubbleData.mediaUrl = mediaUrl.trim();

@@ -4,30 +4,24 @@
 // Propósito: Gerenciamento Seguro, Consistente e Eficiente de Mídias (Sênior)
 // ============================================================
 
-const fs = require('fs').promises;
-const path = require('path');
 const User = require('../models/User');
 const logger = require('../utils/logger');
+const { deleteFromCloudinary } = require('../middlewares/uploadMiddleware');
 
 /**
- * Função Auxiliar Sênior: Limpeza de disco blindada
- * Remove de forma assíncrona o arquivo antigo evitando Path Traversal.
+ * Remove mídia anterior do Cloudinary quando um novo arquivo é enviado.
+ * Compatível com URLs do Cloudinary e com URLs legadas (/uploads/...).
  */
-const deleteOldFile = async (relativeUrl) => {
-  if (!relativeUrl || !relativeUrl.startsWith('/uploads/')) return;
-  
+const deleteOldMedia = async (url) => {
+  if (!url) return;
   try {
-    // Sênior: path.basename isola apenas o nome do arquivo (ex: "foto.jpg"), 
-    // neutralizando qualquer tentativa de injeção de diretório como "../"
-    const filename = path.basename(relativeUrl);
-    const filePath = path.join(__dirname, '../uploads', filename);
-    
-    // Verifica se o arquivo existe antes de tentar deletar
-    await fs.access(filePath);
-    await fs.unlink(filePath);
+    if (url.includes('res.cloudinary.com')) {
+      await deleteFromCloudinary(url);
+    }
+    // URLs legadas em /uploads/ não precisam mais de limpeza em disco
+    // já que o storage local foi removido
   } catch (error) {
-    // Mantido como log seguro: não quebra a requisição do usuário se o arquivo físico sumiu
-    logger.warn('Nao foi possivel deletar arquivo antigo:', { file: relativeUrl, error: error.message });
+    logger.warn('Nao foi possivel deletar midia antiga:', { url, error: error.message });
   }
 };
 
@@ -40,20 +34,16 @@ exports.uploadAvatar = async (req, res, next) => {
       return res.status(400).json({ message: 'Nenhum arquivo enviado.' });
     }
     
-    const newAvatarUrl = `/uploads/${req.file.filename}`;
+    const newAvatarUrl = req.file.cloudinaryUrl;
     
-    // Sênior: Executa a operação em uma única chamada ao banco.
-    // { new: false } faz o Mongoose retornar o objeto ANTES da modificação,
-    // permitindo pegar o avatarUrl antigo sem precisar de um findById prévio.
     const oldUserDoc = await User.findByIdAndUpdate(
       req.user._id,
       { $set: { avatarUrl: newAvatarUrl } },
       { new: false, select: 'avatarUrl' }
     ).lean();
     
-    // Se ele já tinha um avatar salvo localmente, dispara a limpeza em background
     if (oldUserDoc && oldUserDoc.avatarUrl) {
-      deleteOldFile(oldUserDoc.avatarUrl);
+      deleteOldMedia(oldUserDoc.avatarUrl);
     }
     
     return res.json({ 
@@ -75,9 +65,8 @@ exports.uploadCover = async (req, res, next) => {
       return res.status(400).json({ message: 'Nenhum arquivo enviado.' });
     }
     
-    const newCoverUrl = `/uploads/${req.file.filename}`;
+    const newCoverUrl = req.file.cloudinaryUrl;
     
-    // Query única atômica recuperando o estado anterior
     const oldUserDoc = await User.findByIdAndUpdate(
       req.user._id,
       { $set: { coverUrl: newCoverUrl } },
@@ -85,7 +74,7 @@ exports.uploadCover = async (req, res, next) => {
     ).lean();
     
     if (oldUserDoc && oldUserDoc.coverUrl) {
-      deleteOldFile(oldUserDoc.coverUrl);
+      deleteOldMedia(oldUserDoc.coverUrl);
     }
     
     return res.json({ 
@@ -125,7 +114,7 @@ exports.updateCoverByUrl = async (req, res, next) => {
     ).lean();
     
     if (oldUserDoc && oldUserDoc.coverUrl) {
-      deleteOldFile(oldUserDoc.coverUrl);
+      deleteOldMedia(oldUserDoc.coverUrl);
     }
     
     return res.json({ 
@@ -139,4 +128,4 @@ exports.updateCoverByUrl = async (req, res, next) => {
 };
 
 // Exporta a função de limpeza para uso em outros controllers (ex: deleteBubble)
-exports.deleteOldFile = deleteOldFile;
+exports.deleteOldFile = deleteOldMedia;
