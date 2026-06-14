@@ -256,11 +256,12 @@ export default function Profile() {
 
           {/* ================================================================ */}
           {/* AVATAR + OXYGEN RING                                          */}
-          {/* Container flex puro: pai flex, filhos irmãos, gap-2            */}
-          {/* Sem position absolute, sem relative, sem -mt-                  */}
-          {/* OxygenRing = null se inativo (renderização condicional)         */}
+          {/* Container flex puro SEM position, SEM -mt-, SEM pt-            */}
+          {/* Avatar e OxygenRing como únicos filhos irmãos                 */}
+          {/* gap-3 no pai, items-center alinha verticalmente               */}
+          {/* OxygenRing = null se inativo (soma zero ao layout)            */}
           {/* ================================================================ */}
-          <div className="flex items-center justify-center gap-2 mb-4 pt-16">
+          <div className="flex items-center justify-center gap-3 mt-[-48px] mb-4">
             {/* Avatar */}
             <div className="relative shrink-0">
               <div className={`w-24 h-24 rounded-full bg-gradient-to-br from-[#7c3aed] to-[#3b82f6] p-1 shadow-xl ${hasActiveBubbles ? 'shadow-[#7c3aed]/50' : ''}`}>
