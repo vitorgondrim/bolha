@@ -86,6 +86,7 @@ export default function App() {
         <Route element={<PrivateRoute />}>
           <Route path="/feed" element={<Feed />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/profile/:username" element={<Profile />} />
           <Route path="/bubble/:id" element={<BubbleDetail />} />
           <Route path="/create" element={<CreateBubblePage />} />
           <Route path="/explore" element={<Explore />} />

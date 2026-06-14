@@ -313,27 +313,26 @@ exports.toggleLike = async (req, res, next) => {
     const bubbleId = req.params.id;
     const userId = req.user._id;
     
-    // CORRECAO: Usar req.params.id em vez de req.bubble._id
-    // req.bubbleMeta pode não ter sido definido se a rota não usou o middleware
     const bubble = await Bubble.findById(bubbleId);
     if (!bubble || bubble.expiresAt < new Date()) {
       return res.status(444).json({ message: 'A bolha estourou antes da sua interação!' });
     }
 
     const hasLiked = bubble.likes.includes(userId);
-    const timeChange = 10 * 60 * 1000;
+    const timeChange = 10 * 60 * 1000; // 10 minutos em ms
     
+    // CORRECAO: $inc não funciona com campos Date. Usar $set no expiresAt calculado.
     let updateOps = {};
     if (hasLiked) {
       updateOps = {
         $pull: { likes: userId },
-        $inc: { expiresAt: -timeChange }
+        $set: { expiresAt: new Date(bubble.expiresAt.getTime() - timeChange) }
       };
     } else {
       updateOps = {
         $pull: { dislikes: userId },
         $push: { likes: userId },
-        $inc: { expiresAt: timeChange }
+        $set: { expiresAt: new Date(bubble.expiresAt.getTime() + timeChange) }
       };
     }
 
@@ -379,26 +378,26 @@ exports.toggleDislike = async (req, res, next) => {
     const bubbleId = req.params.id;
     const userId = req.user._id;
     
-    // CORRECAO: Usar req.params.id em vez de req.bubble._id
     const bubble = await Bubble.findById(bubbleId);
     if (!bubble || bubble.expiresAt < new Date()) {
       return res.status(444).json({ message: 'A bolha estourou antes do dislike!' });
     }
 
     const hasDisliked = bubble.dislikes.includes(userId);
-    const timeChange = 15 * 60 * 1000;
+    const timeChange = 15 * 60 * 1000; // 15 minutos em ms
     
+    // CORRECAO: $inc não funciona com campos Date. Usar $set no expiresAt calculado.
     let updateOps = {};
     if (hasDisliked) {
       updateOps = {
         $pull: { dislikes: userId },
-        $inc: { expiresAt: timeChange }
+        $set: { expiresAt: new Date(bubble.expiresAt.getTime() + timeChange) }
       };
     } else {
       updateOps = {
         $pull: { likes: userId },
         $push: { dislikes: userId },
-        $inc: { expiresAt: -timeChange }
+        $set: { expiresAt: new Date(bubble.expiresAt.getTime() - timeChange) }
       };
     }
 
@@ -431,25 +430,32 @@ exports.toggleDislike = async (req, res, next) => {
 // ============================================================
 exports.useSopro = async (req, res, next) => {
   try {
-    const bubbleId = req.params.id; // CORRECAO: Usar req.params.id
-    const user = req.user;
+    const bubbleId = req.params.id;
+    const userId = req.user._id;
     
     const bubble = await Bubble.findById(bubbleId);
     if (!bubble || bubble.expiresAt < new Date()) {
       return res.status(444).json({ message: 'Essa bolha já estourou!' });
     }
 
-    if (bubble.author.toString() === user._id.toString()) {
+    if (bubble.author.toString() === userId.toString()) {
       return res.status(400).json({ message: 'Você não pode usar sopro na sua própria bolha.' });
     }
-    if (bubble.sopros.includes(user._id)) {
+    if (bubble.sopros.includes(userId)) {
       return res.status(400).json({ message: 'Você já usou um sopro nesta bolha.' });
     }
 
     // ============================================================
     // FASE 1: RESETA CONTADOR DIÁRIO SE NECESSÁRIO
+    // CORRECAO: req.user vem de .lean() (objeto plano). Precisamos de
+    // um documento Mongoose real para usar .save() no resetDailySoprosIfNeeded.
+    // Buscamos o usuário completo do banco.
     // ============================================================
-    await resetDailySoprosIfNeeded(user);
+    const userDoc = await User.findById(userId);
+    if (!userDoc) {
+      return res.status(404).json({ message: 'Usuário não encontrado.' });
+    }
+    await resetDailySoprosIfNeeded(userDoc);
 
     // ============================================================
     // FASE 2: DESCOBRE LIMITE DIÁRIO (considerando VIP da Wallet)
@@ -458,8 +464,8 @@ exports.useSopro = async (req, res, next) => {
     let applyVipMultiplier = false;
 
     try {
-      const wallet = await Wallet.findOne({ user: user._id }).lean();
-      // Verificação inline de VIP ativo (evita depender de método de instância com .lean())
+      const wallet = await Wallet.findOne({ user: userId }).lean();
+      // Verificação inline de VIP ativo
       const isVipActive = wallet &&
         wallet.vipStatus !== 'none' &&
         wallet.vipExpiresAt &&
@@ -470,17 +476,21 @@ exports.useSopro = async (req, res, next) => {
         applyVipMultiplier = true;
       }
     } catch (walletErr) {
-      logger.warn('Falha ao buscar Wallet para limite VIP, usando padrao:', { userId: user._id, error: walletErr.message });
+      logger.warn('Falha ao buscar Wallet para limite VIP, usando padrao:', { userId, error: walletErr.message });
     }
 
     // ============================================================
     // FASE 3: TENTATIVA ATÔMICA — Prioridade: Diário > Comprado > Wallet
     // ============================================================
 
+    // CORRECAO: User.findOneAndUpdate não retorna documento Mongoose com .save().
+    // Usamos userDoc que já é documento real e foi atualizado pelo resetDailySoprosIfNeeded.
+    // A partir daqui usamos findOneAndUpdate para as operações atômicas.
+    
     // 3a. Tenta usar sopro diário (findOneAndUpdate com barreira $lt)
     let updatedUser = await User.findOneAndUpdate(
       {
-        _id: user._id,
+        _id: userId,
         dailySoprosUsed: { $lt: dailyLimit },
       },
       {
@@ -495,7 +505,7 @@ exports.useSopro = async (req, res, next) => {
     if (!updatedUser) {
       updatedUser = await User.findOneAndUpdate(
         {
-          _id: user._id,
+          _id: userId,
           soprosPurchased: { $gt: 0 },
         },
         {
@@ -508,7 +518,7 @@ exports.useSopro = async (req, res, next) => {
 
     // 3c. Se ambos falharam, retorna erro
     if (!updatedUser) {
-      logger.warn('Sopro bloqueado: saldo insuficiente', { userId: user._id, bubbleId });
+      logger.warn('Sopro bloqueado: saldo insuficiente', { userId, bubbleId });
       return res.status(400).json({ message: 'Sem sopros disponíveis. Compre mais!' });
     }
 
@@ -521,7 +531,7 @@ exports.useSopro = async (req, res, next) => {
       // Sopro comprado → débito atômico via Wallet + multiplicador VIP
       updatedBubble = await injectOxygen({
         bubbleId,
-        userId: user._id,
+        userId,
         source: 'sopro',
         deductFromWallet: true,
         applyVipMultiplier,
@@ -530,7 +540,7 @@ exports.useSopro = async (req, res, next) => {
       // Sopro diário → injeção direta (sem débito na wallet)
       updatedBubble = await injectOxygen({
         bubbleId,
-        userId: user._id,
+        userId,
         source: 'sopro',
         customAmount: 40,
         deductFromWallet: false,
@@ -545,12 +555,12 @@ exports.useSopro = async (req, res, next) => {
     // FASE 5: REGISTRO DA AÇÃO E NOTIFICAÇÕES
     // ============================================================
     await Bubble.findByIdAndUpdate(bubbleId, {
-      $addToSet: { sopros: user._id },
+      $addToSet: { sopros: userId },
     });
 
-    await createNotification(req.io, {
+        await createNotification(req.io, {
       recipient: bubble.author,
-      sender: user._id,
+      sender: userId,
       type: 'sopro',
       bubbleId: bubble._id,
       content: '💨 Sua bolha recebeu um SOPRO VITAL! +40 de oxigênio!'
@@ -560,10 +570,10 @@ exports.useSopro = async (req, res, next) => {
     if (wasCritical && !updatedBubble.hasLeaked) {
       await createNotification(req.io, {
         recipient: updatedBubble.author,
-        sender: user._id,
+        sender: userId,
         type: 'saved_from_expiry',
         bubbleId: updatedBubble._id,
-        content: `🎉 MILAGRE! ${user.username} salvou sua bolha no último minuto!`
+        content: `🎉 MILAGRE! ${userDoc.username} salvou sua bolha no último minuto!`
       });
     }
 
@@ -625,12 +635,14 @@ exports.addComment = async (req, res, next) => {
       return res.status(429).json({ message: 'Aguarde 30 segundos para comentar novamente.' });
     }
     
-    const commentObj = { author: userId, text: text.trim(), createdAt: new Date() };
-    const timeChange = 30 * 60 * 1000;
+        const commentObj = { author: userId, text: text.trim(), createdAt: new Date() };
+    const timeChange = 30 * 60 * 1000; // 30 minutos em ms
 
+    // CORRECAO: $inc não funciona com Date. Calcular novo expiresAt baseado no valor atual.
+    const newExpiresAt = new Date(bubbleCheck.expiresAt.getTime() + timeChange);
     const updatedBubble = await Bubble.findByIdAndUpdate(bubbleId, {
       $push: { comments: commentObj },
-      $inc: { expiresAt: timeChange }
+      $set: { expiresAt: newExpiresAt }
     }, { new: true }).populate('comments.author', 'username');
     
     if (updatedBubble.author.toString() !== userId.toString()) {

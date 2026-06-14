@@ -17,17 +17,24 @@ const createNotification = async (io, data) => {
 };
 
 const formatUserResponse = (userDoc, hasLeakedBubble = false) => {
-  const userObj = userDoc.toObject ? userDoc.toObject() : userDoc;
-  delete userObj.password;
-  delete userObj.email;
-  delete userObj.googleId;
+  // CORRECAO: userDoc pode ser um documento Mongoose (com .toObject()) ou
+  // um objeto .lean() (plano). Em ambos os casos, spread operator funciona.
+  // Usar toObject() se disponível para garantir que é um objeto JS limpo.
+  const userObj = (userDoc && typeof userDoc.toObject === 'function') ? userDoc.toObject() : { ...(userDoc || {}) };
+  
+  // Só deleta se as propriedades existirem (objeto plano vs documento)
+  const result = { ...userObj };
+  delete result.password;
+  delete result.email;
+  delete result.googleId;
+  
   return {
-    ...userObj,
-    bubblesCreated: userObj.totalBubblesCreated || 0,
-    leaksCount: userObj.timesLeaked || 0,
-    soprosGiven: userObj.totalSoprosGiven || 0,
-    followerCount: userObj.followersCount || 0,
-    followingCount: userObj.followingCount || 0,
+    ...result,
+    bubblesCreated: result.totalBubblesCreated || 0,
+    leaksCount: result.timesLeaked || 0,
+    soprosGiven: result.totalSoprosGiven || 0,
+    followerCount: result.followersCount || 0,
+    followingCount: result.followingCount || 0,
     isNeon: hasLeakedBubble
   };
 };
