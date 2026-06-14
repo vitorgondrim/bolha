@@ -193,8 +193,20 @@ exports.getAllBubbles = async (req, res, next) => {
       .lean();
       
     const total = await Bubble.countDocuments(query);
+    const totalPages = Math.ceil(total / limit);
     
-    return res.json({ page, totalPages: Math.ceil(total / limit), total, count: bubbles.length, bubbles });
+    return res.json({
+      page,
+      totalPages,
+      total,
+      count: bubbles.length,
+      bubbles,
+      pagination: {
+        page,
+        limit,
+        hasMore: page < totalPages,
+      },
+    });
   } catch (error) {
     return next(error);
   }
