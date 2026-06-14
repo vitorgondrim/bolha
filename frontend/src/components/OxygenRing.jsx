@@ -62,7 +62,11 @@ export default function OxygenRing({
   size = SIZE,
   animated = true,
   showPercentage = true,
+  show = true,
 }) {
+  // 🔥 Se show=false, remove completamente do DOM — zero layout impact
+  if (!show) return null;
+
   const percentage = useMemo(() => {
     if (maxOxygen <= 0) return 0;
     return Math.max(0, Math.min(100, Math.round((oxygenLevel / maxOxygen) * 100)));

@@ -132,11 +132,11 @@ export default function Profile() {
     return Math.round(total / alive.length);
   }, [profileBubbles]);
 
-  // 🔥 hasActiveBubbles derivado dos dados do perfil (não precisa das bubbles carregadas)
-  // O activeBubbles já vem no profileData da primeira requisição
+    // 🔥 hasActiveBubbles: recalcula sempre que profileData mudar
+  // Usa activeBubbles vindo do /users/me (não depende do fetch de bubbles)
   const hasActiveBubbles = useMemo(() => {
     if (!profileData?.activeBubbles) return false;
-    return profileData.activeBubbles.length > 0;
+    return Array.isArray(profileData.activeBubbles) && profileData.activeBubbles.length > 0;
   }, [profileData]);
 
     const handleFollowToggle = async () => {
@@ -255,52 +255,49 @@ export default function Profile() {
           </div>
 
                     {/* ================================================================ */}
-                    {/* AVATAR + OXYGEN RING                                          */}
-                    {/* Layout: inline-flex items-center com gap fixo                 */}
-                    {/* OxygenRing SEMPRE no DOM (opacity 0 quando inativo)            */}
-                    {/* Container com min-h fixo para zero layout shift                */}
-                    {/* ================================================================ */}
-                    <div className="relative flex justify-center -mt-12 mb-4 min-h-[104px]">
-                      <div className="inline-flex items-center gap-3">
-                        {/* Avatar */}
-                        <div className="relative shrink-0">
-                          <div className={`w-24 h-24 rounded-full bg-gradient-to-br from-[#7c3aed] to-[#3b82f6] p-1 shadow-xl ${hasActiveBubbles ? 'shadow-[#7c3aed]/50' : ''}`}>
-                            {avatarImage ? (
-                              <img src={avatarImage} alt={user.username} className="w-full h-full rounded-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full rounded-full bg-slate-950 flex items-center justify-center text-3xl font-black text-white">
-                                {(user?.username?.charAt(0) || '?').toUpperCase()}
-                              </div>
-                            )}
-                          </div>
-                          {isMyProfile && (
-                            <>
-                              <button
-                                onClick={() => fileInputRef.current?.click()}
-                                className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-sm hover:bg-slate-700 transition"
-                                title="Alterar foto"
-                              >
-                                📷
-                              </button>
-                              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" disabled={uploading} />
-                            </>
-                          )}
-                        </div>
-                        {/* OxygenRing — sempre renderizado; visível apenas com bolhas ativas */}
-                        <div
-                          className="shrink-0 transition-all duration-500 ease-in-out"
-                          style={{
-                            width: '40px',
-                            height: '40px',
-                            opacity: hasActiveBubbles ? 1 : 0,
-                            visibility: hasActiveBubbles ? 'visible' : 'hidden',
-                          }}
-                        >
-                          <OxygenRing oxygenLevel={avgOxygen || 0} maxOxygen={100} size={40} showPercentage={false} />
-                        </div>
-                      </div>
+          {/* AVATAR + OXYGEN RING                                          */}
+          {/* Layout: flex items-center justify-center, sem position abs    */}
+          {/* OxygenRing remove-se do DOM via show=false quando inativo      */}
+          {/* ================================================================ */}
+          <div className="flex justify-center -mt-12 mb-4">
+            <div className="flex items-center justify-center gap-3">
+              {/* Avatar */}
+              <div className="relative shrink-0">
+                <div className={`w-24 h-24 rounded-full bg-gradient-to-br from-[#7c3aed] to-[#3b82f6] p-1 shadow-xl ${hasActiveBubbles ? 'shadow-[#7c3aed]/50' : ''}`}>
+                  {avatarImage ? (
+                    <img src={avatarImage} alt={user.username} className="w-full h-full rounded-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full rounded-full bg-slate-950 flex items-center justify-center text-3xl font-black text-white">
+                      {(user?.username?.charAt(0) || '?').toUpperCase()}
                     </div>
-                    {/* ================================================================ */}
+                  )}
+                </div>
+                {isMyProfile && (
+                  <>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-sm hover:bg-slate-700 transition"
+                      title="Alterar foto"
+                    >
+                      📷
+                    </button>
+                    <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" disabled={uploading} />
+                  </>
+                )}
+              </div>
+              {/* OxygenRing — condicional (remove do DOM quando sem bolhas) */}
+              {hasActiveBubbles && (
+                <OxygenRing
+                  oxygenLevel={avgOxygen || 0}
+                  maxOxygen={100}
+                  size={40}
+                  showPercentage={false}
+                  show={true}
+                />
+              )}
+            </div>
+          </div>
+          {/* ================================================================ */}
 
           {/* Informações do perfil */}
           <div className="text-center px-4">
