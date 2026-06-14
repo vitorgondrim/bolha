@@ -140,22 +140,30 @@ exports.createBubble = async (req, res, next) => {
 // ============================================================
 exports.deleteBubble = async (req, res, next) => {
   try {
-    const bubble = req.bubble; 
-    if (bubble.author.toString() !== req.user._id.toString()) {
+    // CORREÇÃO: Usar req.params.id e req.bubbleMeta (definido pelo middleware) 
+    // em vez de req.bubble (que não é definido pelo middleware bubbleExistsAndAlive)
+    const bubbleId = req.params.id;
+    const bubbleMeta = req.bubbleMeta;
+    
+    if (!bubbleMeta) {
+      return res.status(404).json({ message: 'Bolha não encontrada.' });
+    }
+    
+    if (bubbleMeta.author.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Apenas o autor pode excluir esta bolha.' });
     }
 
-    // Sênior: Busca a bolha completa para recuperar o mediaUrl antes de deletar
-    const bubbleData = await Bubble.findById(bubble._id).select('mediaUrl').lean();
+    // Busca a bolha completa para recuperar o mediaUrl antes de deletar
+    const bubbleData = await Bubble.findById(bubbleId).select('mediaUrl').lean();
     
-    await Bubble.deleteOne({ _id: bubble._id });
+    await Bubble.deleteOne({ _id: bubbleId });
 
     // Limpa o arquivo de mídia do disco para evitar orfãos
     if (bubbleData?.mediaUrl) {
       deleteOldFile(bubbleData.mediaUrl);
     }
 
-    if (req.io) req.io.emit('bubble_deleted', { bubbleId: bubble._id });
+        if (req.io) req.io.emit('bubble_deleted', { bubbleId });
     return res.json({ success: true, message: 'Bolha excluída com sucesso.' });
   } catch (error) {
     return next(error);
@@ -302,10 +310,12 @@ exports.getBubbleById = async (req, res, next) => {
 // ============================================================
 exports.toggleLike = async (req, res, next) => {
   try {
-    const bubbleId = req.bubble._id;
+    const bubbleId = req.params.id;
     const userId = req.user._id;
     
-    let bubble = await Bubble.findById(bubbleId);
+    // CORRECAO: Usar req.params.id em vez de req.bubble._id
+    // req.bubbleMeta pode não ter sido definido se a rota não usou o middleware
+    const bubble = await Bubble.findById(bubbleId);
     if (!bubble || bubble.expiresAt < new Date()) {
       return res.status(444).json({ message: 'A bolha estourou antes da sua interação!' });
     }
@@ -366,10 +376,11 @@ exports.toggleLike = async (req, res, next) => {
 // ============================================================
 exports.toggleDislike = async (req, res, next) => {
   try {
-    const bubbleId = req.bubble._id;
+    const bubbleId = req.params.id;
     const userId = req.user._id;
     
-    let bubble = await Bubble.findById(bubbleId);
+    // CORRECAO: Usar req.params.id em vez de req.bubble._id
+    const bubble = await Bubble.findById(bubbleId);
     if (!bubble || bubble.expiresAt < new Date()) {
       return res.status(444).json({ message: 'A bolha estourou antes do dislike!' });
     }
@@ -420,7 +431,7 @@ exports.toggleDislike = async (req, res, next) => {
 // ============================================================
 exports.useSopro = async (req, res, next) => {
   try {
-    const bubbleId = req.bubble._id;
+    const bubbleId = req.params.id; // CORRECAO: Usar req.params.id
     const user = req.user;
     
     const bubble = await Bubble.findById(bubbleId);
@@ -593,7 +604,7 @@ exports.useSopro = async (req, res, next) => {
 // ============================================================
 exports.addComment = async (req, res, next) => {
   try {
-    const bubbleId = req.bubble._id;
+    const bubbleId = req.params.id; // CORRECAO: Usar req.params.id
     const { text } = req.body;
     const userId = req.user._id;
     
@@ -660,7 +671,7 @@ exports.addComment = async (req, res, next) => {
 // ============================================================
 exports.popBubble = async (req, res, next) => {
   try {
-    const bubbleId = req.bubble._id;
+    const bubbleId = req.params.id; // CORRECAO: Usar req.params.id
     const userId = req.user._id;
 
     const bubble = await Bubble.findById(bubbleId);

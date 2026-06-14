@@ -31,12 +31,12 @@ export default function BubbleCard({
   const [commentText, setCommentText] = useState('');
   const [imageError, setImageError] = useState(false);
 
-  // ============================================================
+    // ============================================================
   // CÁLCULOS DE TEMPO E PRESSÃO (OTIMIZADOS)
   // ============================================================
   
   // Tempo restante em milissegundos
-  const remainingMs = Math.max(new Date(bubble.expiresAt).getTime() - timeNow, 0);
+  const remainingMs = Math.max((bubble?.expiresAt ? new Date(bubble.expiresAt).getTime() : 0) - timeNow, 0);
 
   // Texto formatado dinamicamente: "5m 32s" ou "Estourou! 💥"
   const formatRemainingText = useMemo(() => {
@@ -46,11 +46,12 @@ export default function BubbleCard({
     return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
   }, [remainingMs]);
 
-  // Percentual de vida restante (0-100)
+    // Percentual de vida restante (0-100)
   const percent = useMemo(() => {
+    if (!bubble?.createdAt || !bubble?.expiresAt) return 0;
     const totalDuration = new Date(bubble.expiresAt).getTime() - new Date(bubble.createdAt).getTime();
     return totalDuration > 0 ? clamp((remainingMs / totalDuration) * 100, 0, 100) : 0;
-  }, [bubble.createdAt, bubble.expiresAt, remainingMs]);
+  }, [bubble?.createdAt, bubble?.expiresAt, remainingMs]);
 
   // Nível de estresse térmico/pressão da bolha
   const pressureLevel = useMemo(() => {
@@ -75,12 +76,12 @@ export default function BubbleCard({
     setCommentText('');
   };
 
-  const comments = useMemo(() => bubble.comments || [], [bubble.comments]);
+    const comments = useMemo(() => bubble?.comments || [], [bubble?.comments]);
   const latestComments = useMemo(() => [...comments].reverse().slice(0, 2), [comments]);
-  const hasMedia = bubble.mediaUrl && !imageError;
+  const hasMedia = bubble?.mediaUrl && !imageError;
 
-  // Verifica se o usuário logado é o dono legítimo da bolha
-  const isAuthor = userId && bubble.author && String(bubble.author._id || bubble.author) === String(userId);
+    // Verifica se o usuário logado é o dono legítimo da bolha
+  const isAuthor = userId && bubble?.author && String(bubble.author._id || bubble.author) === String(userId);
 
   return (
     <div

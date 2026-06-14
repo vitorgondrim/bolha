@@ -118,14 +118,18 @@ export default function Profile() {
     return Math.round(total / alive.length);
   }, [profileBubbles]);
 
-  const handleFollowToggle = async () => {
+    const handleFollowToggle = async () => {
+    if (!profileData?.user?._id) return; // CORRECAO: Protecao contra objeto indefinido
     try {
       await api.post(`/users/follow/${profileData.user._id}`);
       setIsFollowing(!isFollowing);
-      setProfileData((prev) => ({
-        ...prev,
-        user: { ...prev.user, followerCount: isFollowing ? prev.user.followerCount - 1 : prev.user.followerCount + 1 },
-      }));
+      setProfileData((prev) => {
+        if (!prev?.user) return prev;
+        return {
+          ...prev,
+          user: { ...prev.user, followerCount: isFollowing ? (prev.user.followerCount || 0) - 1 : (prev.user.followerCount || 0) + 1 },
+        };
+      });
     } catch (err) {
       toast.error('Erro ao seguir/deixar de seguir');
     }
@@ -207,10 +211,10 @@ export default function Profile() {
     );
   }
 
-  const { user, activeBubbles, badges } = profileData;
+    const { user, activeBubbles, badges } = profileData;
   const hasActiveBubbles = activeBubbles && activeBubbles.length > 0;
-  const coverImage = user.coverUrl || null;
-  const avatarImage = user.avatarUrl || null;
+  const coverImage = user?.coverUrl || null;
+  const avatarImage = user?.avatarUrl || null;
 
   return (
     <BubbleHUD>

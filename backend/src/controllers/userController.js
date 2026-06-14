@@ -80,10 +80,17 @@ exports.getPublicProfile = async (req, res, next) => {
   try {
     const user = await User.findOne({ username: req.params.username }).select('-password');
     if (!user) return res.status(404).json({ message: 'Usuário não encontrado.' });
-    const [activeBubbles, isFollowingRelation] = await Promise.all([
-      Bubble.find({ author: user._id, expiresAt: { $gt: new Date() } }).select('-comments').sort({ expiresAt: 1 }).limit(50).lean(),
-      Follow.exists({ follower: req.user._id, following: user._id })
-    ]);
+    
+    // CORREÇÃO: Verificar se req.user existe antes de acessar req.user._id
+    // O middleware optionalAuth não garante que req.user esteja definido
+    const userId = req.user?._id || null;
+    let isFollowingRelation = false;
+    if (userId) {
+      isFollowingRelation = await Follow.exists({ follower: userId, following: user._id });
+    }
+    
+    const activeBubbles = await Bubble.find({ author: user._id, expiresAt: { $gt: new Date() } })
+      .select('-comments').sort({ expiresAt: 1 }).limit(50).lean();
     const badges = calculateBadges(user);
     const hasLeakedBubble = activeBubbles.some(b => b.hasLeaked === true);
     return res.json({ user: { ...formatUserResponse(user, hasLeakedBubble), isFollowing: !!isFollowingRelation }, activeBubbles, badges });
@@ -96,6 +103,7 @@ exports.getPublicProfileById = async (req, res, next) => {
         if (!user) return res.status(404).json({ message: 'Usuário não encontrado.' });
         const activeBubbles = await Bubble.find({ author: user._id, expiresAt: { $gt: new Date() } }).select('-comments').lean();
         const badges = calculateBadges(user);
-        return res.json({ user: formatUserResponse(user), activeBubbles, badges });
+        const hasLeakedBubble = activeBubbles.some(b => b.hasLeaked === true);
+        return res.json({ user: formatUserResponse(user, hasLeakedBubble), activeBubbles, badges });
     } catch (error) { return next(error); }
 };

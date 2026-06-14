@@ -37,8 +37,11 @@ const bubbleExistsAndAlive = async (req, res, next) => {
       // Código HTTP 410 (Gone) é semanticamente perfeito para recursos efêmeros que expiraram!
     }
 
-    // Anexa apenas os metadados de leitura essenciais ao request
+        // Anexa apenas os metadados de leitura essenciais ao request
     req.bubbleMeta = bubbleMeta;
+    // CORRECAO: Define req.bubble também para compatibilidade com controllers
+    // que esperam req.bubble (ex: toggleLike, toggleDislike, etc.)
+    req.bubble = bubbleMeta;
     
     return next();
   } catch (error) {

@@ -204,20 +204,21 @@ export default function BubbleDetail() {
     );
   }
 
-  const likes = bolha.likes?.length || 0;
-  const sopros = bolha.sopros?.length || 0;
+  const likes = bolha?.likes?.length || 0;
+  const sopros = bolha?.sopros?.length || 0;
   const conexoes = likes + sopros;
-  const tempoRestante = new Date(bolha.expiresAt).getTime() - timeNow;
-  const totalMs = new Date(bolha.expiresAt).getTime() - new Date(bolha.createdAt).getTime();
+  const tempoRestante = bolha?.expiresAt ? new Date(bolha.expiresAt).getTime() - timeNow : 0;
+  const totalMs = bolha?.expiresAt && bolha?.createdAt ? new Date(bolha.expiresAt).getTime() - new Date(bolha.createdAt).getTime() : 0;
   const vidaPct = totalMs > 0 ? Math.max(0, tempoRestante / totalMs) : 0;
-  const ehAutor = String(bolha.author?._id || bolha.author) === String(user?._id || user?.id);
-  const jaCurtiu = bolha.likes?.includes(user?._id || user?.id);
-  const jaSoprou = bolha.sopros?.includes(user?._id || user?.id);
+  const ehAutor = bolha ? String(bolha.author?._id || bolha.author) === String(user?._id || user?.id) : false;
+  const jaCurtiu = bolha?.likes?.includes(user?._id || user?.id) ?? false;
+  const jaSoprou = bolha?.sopros?.includes(user?._id || user?.id) ?? false;
 
   // ============================================================
-  // ACOES
+  // ACOES (COM OPTIONAL CHAINING PARA SEGURANCA)
   // ============================================================
   const handleCurtir = async () => {
+    if (!bolha?._id) return; // CORRECAO: Protecao contra objeto indefinido
     try {
       await api.patch(`/bubbles/${bolha._id}/like`);
       await recarregar();
@@ -228,6 +229,7 @@ export default function BubbleDetail() {
   };
 
   const handleSopro = async () => {
+    if (!bolha?._id) return; // CORRECAO: Protecao contra objeto indefinido
     setAnimSopro(true);
     setTimeout(() => setAnimSopro(false), 600);
     try {
@@ -241,7 +243,7 @@ export default function BubbleDetail() {
 
   const handleComentario = async (e) => {
     e.preventDefault();
-    if (!comentario.trim()) return;
+    if (!comentario.trim() || !bolha?._id) return; // CORRECAO: Protecao contra objeto indefinido
     setComentEnviando(true);
     try {
       const res = await api.post(`/bubbles/${id}/comment`, { text: comentario.trim() });
@@ -325,6 +327,7 @@ export default function BubbleDetail() {
             {ehAutor && (
               <button
                 onClick={async () => {
+                  if (!bolha?._id) return; // CORRECAO: Protecao contra objeto indefinido
                   if (!window.confirm("Tem certeza que deseja excluir esta bolha? Esta ação não pode ser desfeita.")) return;
                   try {
                     await api.delete(`/bubbles/${bolha._id}`);
@@ -353,11 +356,11 @@ export default function BubbleDetail() {
 
             {/* Titulo - GRANDE, CENTRAL, NEGRITO */}
             <h1 className="text-2xl font-black text-white leading-tight tracking-tight max-w-lg mx-auto">
-              {bolha.title || "..."}
+              {bolha?.title || "..."}
             </h1>
 
             {/* Tag assunto */}
-            {bolha.subject && bolha.subject !== "Geral" && (
+            {bolha?.subject && bolha.subject !== "Geral" && (
               <div className="mt-3">
                 <span className="inline-block text-[9px] font-bold text-cyan-400/40 bg-cyan-500/8 px-3 py-1 rounded-full border border-cyan-500/15 uppercase tracking-widest">
                   # {bolha.subject.replace(/\s+/g, "").toLowerCase()}
@@ -366,7 +369,7 @@ export default function BubbleDetail() {
             )}
 
             {/* Conteudo - DESTAQUE */}
-            {bolha.content && (
+            {bolha?.content && (
               <div className="mt-6 mx-auto max-w-md">
                 <div className="relative">
                   <div className="absolute -left-3 top-0 bottom-0 w-0.5 bg-gradient-to-b from-cyan-400/40 via-lime-400/20 to-transparent rounded-full" />
