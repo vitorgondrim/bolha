@@ -2,23 +2,49 @@
 // BOLHA - REDE SOCIAL EFÊMERA
 // Arquivo: server.js
 // Propósito: Ponto de entrada, orquestração e segurança da aplicação (Sênior)
+// Versão: Com Diagnostic Bootstrap Wrapper (SRE Layer) + Checkpoints
 // ============================================================
+
+// ============================================================
+// [CHECKPOINT 1] — Diagnostic Bootstrap Wrapper
+// Deve ser o PRIMEIRO require para interceptar erros ANTES
+// de qualquer outro módulo ser carregado.
+// ============================================================
+require('./bootstrap');
 
 const path = require('path');
 const dotenv = require('dotenv');
 const dns = require('dns');
 
-// Força o DNS do Google para resolver SRV do MongoDB Atlas (DNS do Windows falha)
-dns.setServers(['8.8.8.8', '8.8.4.4']);
+// ============================================================
+// [CHECKPOINT 2] — Configuração de DNS
+// ============================================================
+process.stdout.write('[CHECKPOINT] Forcando DNS do Google (8.8.8.8, 8.8.4.4)...\n');
+try {
+  dns.setServers(['8.8.8.8', '8.8.4.4']);
+  process.stdout.write('[CHECKPOINT] DNS setServers executado com sucesso.\n');
+} catch (dnsErr) {
+  process.stderr.write(`[CHECKPOINT] ERRO no dns.setServers: ${dnsErr.message}\n`);
+  process.stderr.write('[CHECKPOINT] Continuando mesmo sem DNS customizado...\n');
+}
 
 // Força o carregamento do arquivo .env que está na raiz (um nível acima de src)
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
+// ============================================================
+// [CHECKPOINT 3] — Logger
+// ============================================================
+process.stdout.write('[CHECKPOINT] Carregando modulo de logger (Winston)...\n');
 const logger = require('./utils/logger');
 const { httpLoggerMiddleware } = require('./utils/logger');
+process.stdout.write('[CHECKPOINT] Logger carregado com sucesso.\n');
 
-logger.info('Variaveis de ambiente carregadas com sucesso.');
+logger.info('[CHECKPOINT] Variaveis de ambiente carregadas com sucesso.');
 
+// ============================================================
+// [CHECKPOINT 4] — Dependências externas
+// ============================================================
+process.stdout.write('[CHECKPOINT] Carregando modulos do Express e dependencias...\n');
 const express = require('express');
 const http = require('http');
 const mongoose = require('mongoose');
@@ -28,7 +54,10 @@ const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
 
+process.stdout.write('[CHECKPOINT] Modulos carregados com sucesso.\n');
+
 // Importação do Middleware de Erro Centralizado (Sênior)
+process.stdout.write('[CHECKPOINT] Carregando middlewares e rotas...\n');
 const errorHandler = require('./middlewares/errorMiddleware');
 
 // Jobs e Monitoramento do Ciclo de Vida das Bolhas
@@ -42,6 +71,7 @@ const bubbleRoutes = require('./routes/bubbleRoutes');
 const userRoutes = require('./routes/userRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+process.stdout.write('[CHECKPOINT] Middlewares e rotas carregados com sucesso.\n');
 
 // Inicialização do Express e do Servidor HTTP acoplado
 const app = express();
@@ -202,32 +232,95 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 let expiryWatchers;
 
-logger.info('Iniciando conexoes com servicos de infraestrutura...');
+// ============================================================
+// [CHECKPOINT 5] — Iniciando conexões de infraestrutura
+// ============================================================
+process.stdout.write('[CHECKPOINT] Iniciando conexoes com servicos de infraestrutura...\n');
+logger.info('[CHECKPOINT] Iniciando conexoes com servicos de infraestrutura...');
+
+// ============================================================
+// [CHECKPOINT 6] — Conexão MongoDB
+// ============================================================
+process.stdout.write('[CHECKPOINT] Iniciando conexao Mongoose...\n');
+process.stdout.write(`[CHECKPOINT] MONGO_URI prefix: ${process.env.MONGO_URI ? process.env.MONGO_URI.substring(0, 20) + '...' : 'UNDEFINED'}\n`);
+logger.info('[CHECKPOINT] Iniciando conexao com MongoDB...');
 
 // Sênior: Conecta ao MongoDB Atlas primeiro. O servidor HTTP só abre as portas
 // para o público externo depois que a conexão com o banco de dados estiver validada.
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
+    // ============================================================
+    // [CHECKPOINT 7] — MongoDB conectado
+    // ============================================================
+    process.stdout.write('[CHECKPOINT] Conexao Mongoose OK! MongoDB conectado.\n');
     logger.info('[INFRA] MongoDB Atlas conectado com sucesso!');
     
     // Dispara o loop assíncrono do background worker de vitalidade (Mente Coletiva)
+    process.stdout.write('[CHECKPOINT] Iniciando VitalityWatcher...\n');
     expiryWatchers = startVitalityWatcher(io);
     logger.info('[WORKER] Monitor de vitalidade (Mente Coletiva) iniciado!');
+    process.stdout.write('[CHECKPOINT] VitalityWatcher iniciado.\n');
 
     // Cron: Limpeza diária de arquivos órfãos (todo dia às 3h da manhã)
+    process.stdout.write('[CHECKPOINT] Configurando cron job de limpeza...\n');
     cron.schedule('0 3 * * *', async () => {
       logger.info('[CRON] Iniciando limpeza de uploads orfaos...');
       await cleanupOrphanFiles();
     });
     logger.info('[CRON] Agendador de limpeza de uploads configurado (diario, 03:00).');
+    process.stdout.write('[CHECKPOINT] Cron job configurado.\n');
+
+    // ============================================================
+    // [CHECKPOINT 8] — Iniciando servidor HTTP
+    // ============================================================
+    process.stdout.write(`[CHECKPOINT] Iniciando servidor na porta ${PORT}...\n`);
+    logger.info(`[CHECKPOINT] Iniciando servidor HTTP na porta ${PORT}...`);
 
     // Sabe do banco? Agora sim abrimos o servidor para escutar tráfego da rede
     server.listen(PORT, () => {
+      // ============================================================
+      // [CHECKPOINT 9] — Servidor iniciado com sucesso
+      // ============================================================
+      process.stdout.write(`[CHECKPOINT] Servidor iniciado com sucesso na porta ${PORT}.\n`);
       logger.info(`[SERVER] Bolha online na porta ${PORT}`);
+    });
+
+    // Tratamento de erro no listen (ex: porta ocupada)
+    server.on('error', (listenErr) => {
+      process.stderr.write(`[CHECKPOINT::FATAL] Erro ao iniciar servidor HTTP: ${listenErr.message}\n`);
+      process.stderr.write(`[CHECKPOINT::FATAL] Stack: ${listenErr.stack}\n`);
+      logger.error(`[FATAL] Erro ao iniciar servidor HTTP: ${listenErr.message}`, { stack: listenErr.stack });
+      process.exit(1);
     });
   })
   .catch((err) => {
-    logger.error(`[FATAL] Erro ao conectar no MongoDB: ${err.message}`);
+    // ============================================================
+    // [CHECKPOINT 10] — Falha na conexão MongoDB
+    // ============================================================
+    // Escrita DUPLA: no stdout (bootstrap) e no logger (Winston)
+    process.stderr.write('\n========================================\n');
+    process.stderr.write(`[CHECKPOINT::FATAL] Erro ao conectar no MongoDB!\n`);
+    process.stderr.write(`Nome do erro: ${err.name || 'Unknown'}\n`);
+    process.stderr.write(`Mensagem: ${err.message || 'Sem mensagem de erro'}\n`);
+    process.stderr.write(`Stack: ${err.stack || 'Sem stack trace'}\n`);
+    process.stderr.write(`Codigo: ${err.code || 'N/A'}\n`);
+    if (err.reason) {
+      process.stderr.write(`Razao: ${JSON.stringify(err.reason)}\n`);
+    }
+    process.stderr.write('========================================\n');
+    
+    // Tenta logar via Winston (pode falhar se o logger estiver quebrado)
+    try {
+      logger.error(`[FATAL] Erro ao conectar no MongoDB: ${err.message}`, {
+        errorName: err.name,
+        errorCode: err.code,
+        stack: err.stack
+      });
+    } catch (logErr) {
+      process.stderr.write(`[CHECKPOINT] Logger Winston tambem falhou: ${logErr.message}\n`);
+    }
+    
+    process.stderr.write('[CHECKPOINT] Processo sera encerrado via process.exit(1) - visivel no log do Render.\n');
     process.exit(1); // Encerra o processo imediatamente com código de falha
   });
 
@@ -237,6 +330,7 @@ mongoose.connect(process.env.MONGO_URI)
 
 // Captura exceções assíncronas que falharam fora das rotas comuns (Previne quebras silenciosas)
 process.on('unhandledRejection', (reason) => {
+  process.stderr.write(`[SERVER::unhandledRejection] Rejeicao assincrona nao tratada: ${reason instanceof Error ? reason.message : String(reason)}\n`);
   logger.error('Rejeicao assincrona nao tratada capturada na raiz:', { reason: String(reason) });
 });
 

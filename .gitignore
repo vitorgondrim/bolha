@@ -48,6 +48,12 @@ Desktop.ini
 backend/uploads/*
 !backend/uploads/.gitkeep
 
+# Logs de execução (criados em runtime pelo bootstrap)
+backend/src/logs/
+backend/logs/
+src/logs/
+logs/
+
 # Arquivos temporários
 *.tmp
 *.temp
