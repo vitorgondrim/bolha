@@ -175,7 +175,7 @@ const injectOxygen = async ({
         },
         $push: { oxygenInjections: injection },
       },
-      { new: true }
+            { returnDocument: 'after' }
     );
 
     // Sincroniza expiresAt

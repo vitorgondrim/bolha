@@ -71,7 +71,7 @@ exports.markAsRead = async (req, res, next) => {
         recipient: req.user._id // Trava de segurança: impede que usuários alterem notificações alheias (Anti-IDOR)
       },
       { $set: { read: true } }, 
-      { new: true }
+      { returnDocument: 'after' }
     ).lean();
     
     if (!notification) {

@@ -49,8 +49,8 @@ const checkForLeak = async (bubble, io) => {
   if (score >= LEAK_SCORE_THRESHOLD) {
     const updatedBubble = await Bubble.findOneAndUpdate(
       { _id: bubble._id, hasLeaked: false },
-      { $set: { hasLeaked: true } },
-      { new: true }
+            { $set: { hasLeaked: true } },
+      { returnDocument: 'after' }
     );
 
     if (updatedBubble) {
@@ -357,7 +357,7 @@ exports.toggleLike = async (req, res, next) => {
       };
     }
 
-    const updatedBubble = await Bubble.findByIdAndUpdate(bubbleId, updateOps, { new: true });
+        const updatedBubble = await Bubble.findByIdAndUpdate(bubbleId, updateOps, { returnDocument: 'after' });
     
     await checkForLeak(updatedBubble, req.io);
     await updateSurvivorRecord(req.user, updatedBubble);
@@ -422,7 +422,7 @@ exports.toggleDislike = async (req, res, next) => {
       };
     }
 
-    const updatedBubble = await Bubble.findByIdAndUpdate(bubbleId, updateOps, { new: true });
+        const updatedBubble = await Bubble.findByIdAndUpdate(bubbleId, updateOps, { returnDocument: 'after' });
     
     await checkForLeak(updatedBubble, req.io);
     await updateSurvivorRecord(req.user, updatedBubble);
@@ -503,7 +503,7 @@ exports.useSopro = async (req, res, next) => {
       {
         $inc: { dailySoprosUsed: 1, totalSoprosGiven: 1 },
       },
-      { new: true }
+            { returnDocument: 'after' }
     );
 
     let usedPurchasedSopro = false;
@@ -518,7 +518,7 @@ exports.useSopro = async (req, res, next) => {
         {
           $inc: { soprosPurchased: -1, totalSoprosGiven: 1 },
         },
-        { new: true }
+        { returnDocument: 'after' }
       );
       usedPurchasedSopro = true;
     }
@@ -581,7 +581,7 @@ exports.useSopro = async (req, res, next) => {
         $inc: { oxygenLevel: oxygenAmount },                    // Incrementa oxigênio
         $set: { lastOxygenDecayCheck: new Date() },             // Atualiza timestamp de decaimento
       },
-      { new: true }
+            { returnDocument: 'after' }
     );
 
     // ─── CONFLICT DETECTION ─────────────────────────────────────
@@ -724,7 +724,7 @@ exports.addComment = async (req, res, next) => {
     const updatedBubble = await Bubble.findByIdAndUpdate(bubbleId, {
       $push: { comments: commentObj },
       $set: { expiresAt: newExpiresAt }
-    }, { new: true }).populate('comments.author', 'username');
+  }, { returnDocument: 'after' }).populate('comments.author', 'username');
     
     if (updatedBubble.author.toString() !== userId.toString()) {
       await createNotification(req.io, {
@@ -781,9 +781,9 @@ exports.popBubble = async (req, res, next) => {
       {
         $push: { poppedBy: userId },
         $inc: { popCount: 1 }
-      },
-      { new: true }
-    );
+        },
+        { returnDocument: 'after' }
+      );
 
     if (req.io) {
       req.io.to(updatedBubble._id.toString()).emit('bubble_popped', {

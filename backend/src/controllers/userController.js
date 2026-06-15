@@ -71,12 +71,12 @@ exports.toggleFollow = async (req, res, next) => {
     if (existingFollow) {
       await Follow.deleteOne({ _id: existingFollow._id });
       await User.findByIdAndUpdate(myId, { $inc: { followingCount: -1 } });
-      const updatedTarget = await User.findByIdAndUpdate(targetUserId, { $inc: { followersCount: -1 } }, { new: true });
+      const updatedTarget = await User.findByIdAndUpdate(targetUserId, { $inc: { followersCount: -1 } }, { returnDocument: 'after' });
       return res.json({ success: true, isFollowing: false, followerCount: updatedTarget.followersCount || 0 });
     } else {
       await Follow.create({ follower: myId, following: targetUserId });
       await User.findByIdAndUpdate(myId, { $inc: { followingCount: 1 } });
-      const updatedTarget = await User.findByIdAndUpdate(targetUserId, { $inc: { followersCount: 1 } }, { new: true });
+      const updatedTarget = await User.findByIdAndUpdate(targetUserId, { $inc: { followersCount: 1 } }, { returnDocument: 'after' });
       await createNotification(req.io, { recipient: targetUserId, sender: myId, type: 'follow', content: `👥 ${req.user.username} começou a seguir você!` });
       return res.json({ success: true, isFollowing: true, followerCount: updatedTarget.followersCount || 0 });
     }

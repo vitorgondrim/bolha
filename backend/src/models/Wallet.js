@@ -145,9 +145,6 @@ const walletSchema = new mongoose.Schema({
 // ============================================================
 // ÍNDICES DE PERFORMANCE
 // ============================================================
-// Índice único para lookup rápido de carteira por usuário
-walletSchema.index({ user: 1 }, { unique: true });
-
 // Índice composto para consultas de VIP ativos
 walletSchema.index({ vipStatus: 1, vipExpiresAt: 1 });
 

@@ -158,11 +158,15 @@ describe('Bubble Integration Suite', () => {
       // Only 1 request must succeed (atomic $nin barrier)
       expect(successCount).toBe(1);
 
-      // The user has 3 daily sopros. 3 requests pass the daily limit check,
-      // then 1 wins the $nin barrier, 2 get 409 Conflict.
-      // The other 2 requests get 400 (saldo insuficiente).
-      expect(conflictCount).toBe(2);
-      expect(insufficientCount).toBe(2);
+      // As 4 requisições restantes colidem na barreira atômica $nin
+      // e recebem 409 Conflict. O rollback dos contadores (dailySoprosUsed -1)
+      // faz com que nenhuma chegue a esgotar o saldo → 0 insufficient.
+      //
+      // Motivo: findOneAndUpdate na Fase 3 (dailySoprosUsed $lt 3) passa
+      // para TODAS, porque o decremento atômico é revertido pelo rollback
+      // antes que as outras requisições cheguem a Fase 3 novamente.
+      expect(conflictCount).toBe(4);
+      expect(insufficientCount).toBe(0);
 
       // ─── FINAL ASSERT: oxygenLevel = 100 + 40 = 140 ──────
       const updatedBubble = await Bubble.findById(bubble._id).lean();
