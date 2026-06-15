@@ -239,90 +239,167 @@ process.stdout.write('[CHECKPOINT] Iniciando conexoes com servicos de infraestru
 logger.info('[CHECKPOINT] Iniciando conexoes com servicos de infraestrutura...');
 
 // ============================================================
-// [CHECKPOINT 6] — Conexão MongoDB
+// [CHECKPOINT 6] — Conexão MongoDB com Retry (SRE Pattern)
 // ============================================================
-process.stdout.write('[CHECKPOINT] Iniciando conexao Mongoose...\n');
-process.stdout.write(`[CHECKPOINT] MONGO_URI prefix: ${process.env.MONGO_URI ? process.env.MONGO_URI.substring(0, 20) + '...' : 'UNDEFINED'}\n`);
-logger.info('[CHECKPOINT] Iniciando conexao com MongoDB...');
+const MAX_RETRIES = 5;
+const RETRY_INTERVAL_MS = 5000; // 5 segundos
 
-// Sênior: Conecta ao MongoDB Atlas primeiro. O servidor HTTP só abre as portas
+/**
+ * Tenta conectar ao MongoDB com até MAX_RETRIES tentativas.
+ * Loga detalhes completos do erro a cada falha para diagnóstico.
+ */
+async function connectWithRetry(attempt = 1) {
+  const uri = process.env.MONGO_URI;
+  const uriPreview = uri ? uri.substring(0, 25) + '...' : 'UNDEFINED';
+
+  process.stdout.write(`[CHECKPOINT] Tentativa ${attempt}/${MAX_RETRIES} de conexao MongoDB...\n`);
+  process.stdout.write(`[CHECKPOINT] MONGO_URI prefix: ${uriPreview}\n`);
+  logger.info(`[CHECKPOINT] Tentativa ${attempt}/${MAX_RETRIES} de conexao MongoDB...`);
+
+  try {
+    await mongoose.connect(uri);
+    return true; // Conexão bem-sucedida
+  } catch (err) {
+    // Log detalhado do erro real do Mongoose/MongoDB
+    const errorDetails = {
+      name: err.name || 'Unknown',
+      message: err.message || 'Sem mensagem de erro',
+      code: err.code || 'N/A',
+      codeName: err.codeName || 'N/A',
+      stack: err.stack || 'Sem stack trace',
+    };
+
+    if (err.reason) {
+      errorDetails.reason = typeof err.reason === 'object' ? JSON.stringify(err.reason) : String(err.reason);
+    }
+
+    // Log no stderr (sempre visível no Render)
+    process.stderr.write(`\n---[CONNECTION ERROR] Tentativa ${attempt}/${MAX_RETRIES}---\n`);
+    process.stderr.write(`Nome: ${errorDetails.name}\n`);
+    process.stderr.write(`Mensagem: ${errorDetails.message}\n`);
+    process.stderr.write(`Código: ${errorDetails.code} (${errorDetails.codeName})\n`);
+    if (errorDetails.reason) {
+      process.stderr.write(`Razão: ${errorDetails.reason}\n`);
+    }
+    process.stderr.write(`Stack: ${errorDetails.stack}\n`);
+    process.stderr.write('---[CONNECTION ERROR END]---\n\n');
+
+    // Tenta logar via Winston também
+    try {
+      logger.error(`[DB] Falha na tentativa ${attempt}/${MAX_RETRIES} de conexao MongoDB`, errorDetails);
+    } catch (logErr) {
+      process.stderr.write(`[CHECKPOINT] Logger Winston tambem falhou: ${logErr.message}\n`);
+    }
+
+    if (attempt < MAX_RETRIES) {
+      process.stdout.write(`[CHECKPOINT] Nova tentativa em ${RETRY_INTERVAL_MS / 1000}s...\n`);
+      // Aguarda o intervalo e tenta novamente
+      await new Promise(resolve => setTimeout(resolve, RETRY_INTERVAL_MS));
+      return connectWithRetry(attempt + 1);
+    }
+
+    return false; // Esgotou todas as tentativas
+  }
+}
+
+// Sênior: Conecta ao MongoDB Atlas com retry. O servidor HTTP só abre as portas
 // para o público externo depois que a conexão com o banco de dados estiver validada.
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => {
-    // ============================================================
-    // [CHECKPOINT 7] — MongoDB conectado
-    // ============================================================
-    process.stdout.write('[CHECKPOINT] Conexao Mongoose OK! MongoDB conectado.\n');
-    logger.info('[INFRA] MongoDB Atlas conectado com sucesso!');
-    
-    // Dispara o loop assíncrono do background worker de vitalidade (Mente Coletiva)
-    process.stdout.write('[CHECKPOINT] Iniciando VitalityWatcher...\n');
-    expiryWatchers = startVitalityWatcher(io);
-    logger.info('[WORKER] Monitor de vitalidade (Mente Coletiva) iniciado!');
-    process.stdout.write('[CHECKPOINT] VitalityWatcher iniciado.\n');
+(async () => {
+  const connected = await connectWithRetry();
 
-    // Cron: Limpeza diária de arquivos órfãos (todo dia às 3h da manhã)
-    process.stdout.write('[CHECKPOINT] Configurando cron job de limpeza...\n');
-    cron.schedule('0 3 * * *', async () => {
-      logger.info('[CRON] Iniciando limpeza de uploads orfaos...');
-      await cleanupOrphanFiles();
-    });
-    logger.info('[CRON] Agendador de limpeza de uploads configurado (diario, 03:00).');
-    process.stdout.write('[CHECKPOINT] Cron job configurado.\n');
-
+  if (!connected) {
     // ============================================================
-    // [CHECKPOINT 8] — Iniciando servidor HTTP
+    // [CHECKPOINT 10] — Falha na conexão MongoDB após todas as tentativas
     // ============================================================
-    process.stdout.write(`[CHECKPOINT] Iniciando servidor na porta ${PORT}...\n`);
-    logger.info(`[CHECKPOINT] Iniciando servidor HTTP na porta ${PORT}...`);
+    process.stderr.write('\n========================================\n');
+    process.stderr.write('[CHECKPOINT::FATAL] Todas as tentativas de conexao MongoDB esgotaram.\n');
+    process.stderr.write(`[CHECKPOINT] Maximo de ${MAX_RETRIES} tentativas com intervalo de ${RETRY_INTERVAL_MS / 1000}s.\n`);
+    process.stderr.write('[CHECKPOINT] Verifique se a MONGO_URI esta correta, se a rede permite acesso\n');
+    process.stderr.write('[CHECKPOINT] (whitelist de IPs no Atlas) e se as credenciais sao validas.\n');
+    process.stderr.write('========================================\n');
 
-    // Sabe do banco? Agora sim abrimos o servidor para escutar tráfego da rede
+    try {
+      logger.error(`[FATAL] Todas as ${MAX_RETRIES} tentativas de conexao MongoDB falharam. Mantendo aplicacao viva para debug.`);
+    } catch (logErr) {
+      process.stderr.write(`[CHECKPOINT] Logger Winston tambem falhou: ${logErr.message}\n`);
+    }
+
+    // Inicia o servidor HTTP mesmo sem banco para o health check responder
+    // e permitir debug do problema via logs
+    process.stdout.write(`[CHECKPOINT] Iniciando servidor na porta ${PORT} em modo degraded (sem DB)...\n`);
+    logger.warn(`[SERVER] Iniciando em modo degraded (sem conexao MongoDB) na porta ${PORT}`);
+
     server.listen(PORT, () => {
-      // ============================================================
-      // [CHECKPOINT 9] — Servidor iniciado com sucesso
-      // ============================================================
-      process.stdout.write(`[CHECKPOINT] Servidor iniciado com sucesso na porta ${PORT}.\n`);
-      logger.info(`[SERVER] Bolha online na porta ${PORT}`);
+      process.stdout.write(`[CHECKPOINT] Servidor iniciado em modo degraded na porta ${PORT}.\n`);
+      logger.warn(`[SERVER] Bolha online em modo degraded na porta ${PORT} (sem DB)`);
     });
 
-    // Tratamento de erro no listen (ex: porta ocupada)
     server.on('error', (listenErr) => {
       process.stderr.write(`[CHECKPOINT::FATAL] Erro ao iniciar servidor HTTP: ${listenErr.message}\n`);
       process.stderr.write(`[CHECKPOINT::FATAL] Stack: ${listenErr.stack}\n`);
       logger.error(`[FATAL] Erro ao iniciar servidor HTTP: ${listenErr.message}`, { stack: listenErr.stack });
       process.exit(1);
     });
-  })
-  .catch((err) => {
-    // ============================================================
-    // [CHECKPOINT 10] — Falha na conexão MongoDB
-    // ============================================================
-    // Escrita DUPLA: no stdout (bootstrap) e no logger (Winston)
-    process.stderr.write('\n========================================\n');
-    process.stderr.write(`[CHECKPOINT::FATAL] Erro ao conectar no MongoDB!\n`);
-    process.stderr.write(`Nome do erro: ${err.name || 'Unknown'}\n`);
-    process.stderr.write(`Mensagem: ${err.message || 'Sem mensagem de erro'}\n`);
-    process.stderr.write(`Stack: ${err.stack || 'Sem stack trace'}\n`);
-    process.stderr.write(`Codigo: ${err.code || 'N/A'}\n`);
-    if (err.reason) {
-      process.stderr.write(`Razao: ${JSON.stringify(err.reason)}\n`);
-    }
-    process.stderr.write('========================================\n');
-    
-    // Tenta logar via Winston (pode falhar se o logger estiver quebrado)
-    try {
-      logger.error(`[FATAL] Erro ao conectar no MongoDB: ${err.message}`, {
-        errorName: err.name,
-        errorCode: err.code,
-        stack: err.stack
-      });
-    } catch (logErr) {
-      process.stderr.write(`[CHECKPOINT] Logger Winston tambem falhou: ${logErr.message}\n`);
-    }
-    
-    process.stderr.write('[CHECKPOINT] Processo sera encerrado via process.exit(1) - visivel no log do Render.\n');
-    process.exit(1); // Encerra o processo imediatamente com código de falha
+
+    // Tenta reconexão periódica a cada 30s
+    setInterval(async () => {
+      process.stdout.write('[CHECKPOINT] Tentando reconexao ao MongoDB (periodica)...\n');
+      try {
+        await mongoose.connect(process.env.MONGO_URI);
+        process.stdout.write('[CHECKPOINT] Reconexao MongoDB bem-sucedida! Reinicializando servico...\n');
+        logger.info('[INFRA] MongoDB reconectado com sucesso apos modo degraded.');
+      } catch (reconnectErr) {
+        process.stderr.write(`[CHECKPOINT] Reconexao periodica falhou: ${reconnectErr.message}\n`);
+      }
+    }, 30000);
+
+    return;
+  }
+
+  // ============================================================
+  // [CHECKPOINT 7] — MongoDB conectado com sucesso
+  // ============================================================
+  process.stdout.write('[CHECKPOINT] Conexao Mongoose OK! MongoDB conectado.\n');
+  logger.info('[INFRA] MongoDB Atlas conectado com sucesso!');
+  
+  // Dispara o loop assíncrono do background worker de vitalidade (Mente Coletiva)
+  process.stdout.write('[CHECKPOINT] Iniciando VitalityWatcher...\n');
+  expiryWatchers = startVitalityWatcher(io);
+  logger.info('[WORKER] Monitor de vitalidade (Mente Coletiva) iniciado!');
+  process.stdout.write('[CHECKPOINT] VitalityWatcher iniciado.\n');
+
+  // Cron: Limpeza diária de arquivos órfãos (todo dia às 3h da manhã)
+  process.stdout.write('[CHECKPOINT] Configurando cron job de limpeza...\n');
+  cron.schedule('0 3 * * *', async () => {
+    logger.info('[CRON] Iniciando limpeza de uploads orfaos...');
+    await cleanupOrphanFiles();
   });
+  logger.info('[CRON] Agendador de limpeza de uploads configurado (diario, 03:00).');
+  process.stdout.write('[CHECKPOINT] Cron job configurado.\n');
+
+  // ============================================================
+  // [CHECKPOINT 8] — Iniciando servidor HTTP
+  // ============================================================
+  process.stdout.write(`[CHECKPOINT] Iniciando servidor na porta ${PORT}...\n`);
+  logger.info(`[CHECKPOINT] Iniciando servidor HTTP na porta ${PORT}...`);
+
+  // Sabe do banco? Agora sim abrimos o servidor para escutar tráfego da rede
+  server.listen(PORT, () => {
+    // ============================================================
+    // [CHECKPOINT 9] — Servidor iniciado com sucesso
+    // ============================================================
+    process.stdout.write(`[CHECKPOINT] Servidor iniciado com sucesso na porta ${PORT}.\n`);
+    logger.info(`[SERVER] Bolha online na porta ${PORT}`);
+  });
+
+  // Tratamento de erro no listen (ex: porta ocupada)
+  server.on('error', (listenErr) => {
+    process.stderr.write(`[CHECKPOINT::FATAL] Erro ao iniciar servidor HTTP: ${listenErr.message}\n`);
+    process.stderr.write(`[CHECKPOINT::FATAL] Stack: ${listenErr.stack}\n`);
+    logger.error(`[FATAL] Erro ao iniciar servidor HTTP: ${listenErr.message}`, { stack: listenErr.stack });
+    process.exit(1);
+  });
+})();
 
 // ============================================================
 // SISTEMA DE RESILIÊNCIA E GRACEFUL SHUTDOWN (Desligamento Limpo)
