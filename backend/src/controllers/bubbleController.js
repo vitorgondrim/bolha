@@ -16,7 +16,7 @@ const { resetDailySoprosIfNeeded } = require('../utils/soproUtils');
 const logger = require('../utils/logger');
 const { deleteOldFile } = require('./uploadController');
 const { createNotification } = require('../services/notificationService');
-const { bubbleSchema } = require('../../../shared/schemas/bubbleSchema');
+const { bubbleSchema } = require('../schemas/bubbleSchema');
 
 const LEAK_SCORE_THRESHOLD = parseInt(process.env.LEAK_SCORE_THRESHOLD, 10) || 12;
 

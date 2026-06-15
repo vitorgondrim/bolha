@@ -5,6 +5,6 @@
 //            Consistente com o resto do projeto (CommonJS)
 // ============================================================
 
-const { bubbleSchema } = require('../../../shared/schemas/bubbleSchema');
+const { bubbleSchema } = require('../schemas/bubbleSchema');
 
 module.exports = { bubbleSchema };
