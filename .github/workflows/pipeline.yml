@@ -65,11 +65,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-20-
 
-      # ─── 4. Instalação de dependências ────────────────────
-      - name: Instalar dependências
+      # ─── 4. Instalação de dependências (raiz + backend) ────
+      # A pasta shared/ importa módulos do package.json da raiz (ex: zod)
+      - name: Instalar dependências da raiz
+        run: npm ci
+      - name: Instalar dependências do backend
         working-directory: ./backend
         run: npm ci
-        # npm ci é mais rápido e determinístico que npm install em CI
 
       # ─── 5. Execução dos testes ───────────────────────────
       - name: Executar testes de integração
