@@ -195,6 +195,8 @@ Module.prototype.require = function (id) {
     
     if (elapsed > 1000) {
       process.stderr.write(`[BOOTSTRAP::SLOW] Require lento detectado: "${id}" levou ${elapsed}ms\n`);
+      process.stderr.write(`[BOOTSTRAP::SLOW] Atencao: Apenas monitoramento. O processo NAO sera encerrado.\n`);
+      process.stderr.write(`[BOOTSTRAP::SLOW] O require continua normalmente para evitar falhas em ambientes de nuvem com variacao de inicializacao.\n`);
     }
     
     return result;
