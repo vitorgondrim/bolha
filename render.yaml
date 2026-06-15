@@ -1,15 +1,15 @@
 # ============================================================
-# BOLHA - CONFIGURAÇÃO DO RENDER (raiz do repositório)
+# BOLHA - CONFIGURAÇÃO DO RENDER
 # ============================================================
 
 services:
   - type: web
     name: bolha-backend
     runtime: node
+    region: ohio
     plan: free
-    rootDir: backend
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: cd backend && npm install && cd ../ && npm install
+    startCommand: cd backend && node src/server.js
     envVars:
       - key: NODE_ENV
         value: production
