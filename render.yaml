@@ -9,7 +9,7 @@ services:
     region: ohio
     plan: free
     buildCommand: cd backend && npm install
-    startCommand: cd backend && node src/server.js
+    startCommand: cd backend && NODE_ENV=production node src/server.js
     envVars:
       - key: NODE_ENV
         value: production
