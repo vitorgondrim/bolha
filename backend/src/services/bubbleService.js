@@ -95,10 +95,11 @@ const calculateVitality = async (bubble, save = true) => {
  * @param {ObjectId} options.bubbleId - ID da bolha alvo
  * @param {ObjectId} options.userId - ID do usuário que realizou a interação
  * @param {string} options.source - 'like' | 'comment' | 'sopro' | 'promotion'
- * @param {number} [options.customAmount] - Quantidade customizada (opcional)
+  * @param {number} [options.customAmount] - Quantidade customizada (opcional)
  * @param {boolean} [options.deductFromWallet=false] - Se true, debita 1 da wallet do usuário
  * @param {boolean} [options.applyVipMultiplier=false] - Se true, aplica multiplicador VIP
- * @returns {Object} bubble atualizado
+ * @param {boolean} [options.addToSoprosArray=false] - Se true, adiciona userId ao array sopros (proteção $nin)
+ * @returns {Object|null} bubble atualizado ou null se conflito/duplicata
  */
 const injectOxygen = async ({
   bubbleId,
@@ -107,6 +108,7 @@ const injectOxygen = async ({
   customAmount = null,
   deductFromWallet = false,
   applyVipMultiplier = false,
+  addToSoprosArray = false,
 } = {}) => {
   let amount = customAmount || OXYGEN.INJECTION[source.toUpperCase()] || 0;
   if (amount <= 0) {
@@ -128,7 +130,7 @@ const injectOxygen = async ({
 
       if (!wallet) {
         logger.warn('Saldo insuficiente na wallet para sopro:', { userId, bubbleId });
-        throw new Error('Saldo insuficiente na carteira');
+        return null; // ← Retorna null em vez de exceção para ser tratado pelo controller
       }
 
       // Aplica multiplicador VIP se solicitado
@@ -139,54 +141,77 @@ const injectOxygen = async ({
     }
 
     // ============================================================
-    // FASE 2: APLICA DECAIMENTO PENDENTE
+    // FASE 2: APLICA DECAIMENTO PENDENTE + INJEÇÃO ATÔMICA
     // ============================================================
-    let bubble = await Bubble.findById(bubbleId);
-    if (!bubble) return null;
 
-    // Aplica decaimento antes de injetar
-    bubble = await calculateVitality(bubble, false);
-
-    if (bubble.oxygenLevel <= 0) {
-      logger.info(`Tentativa de injecao em bolha morta: ${bubbleId}`);
-      return bubble;
-    }
-
-    // ============================================================
-    // FASE 3: INJETA OXIGÊNIO NA BOLHA
-    // ============================================================
-    const maxOxygen = bubble.maxOxygen || OXYGEN.MAX_DEFAULT;
-    const newOxygen = Math.min(maxOxygen, bubble.oxygenLevel + amount);
-
-    const injection = {
-      source: deductFromWallet ? 'sopro' : source,
-      amount,
-      byUser: userId,
-      at: new Date(),
-      metadata: deductFromWallet ? { deductedFromWallet: true, vipMultiplierApplied: applyVipMultiplier } : {},
+    // Monta o objeto de update
+    const updateOps = {
+      $set: {
+        lastOxygenDecayCheck: new Date(),
+      },
+      $inc: {
+        oxygenLevel: amount,
+      },
+      $push: {
+        oxygenInjections: {
+          source: deductFromWallet ? 'sopro' : source,
+          amount,
+          byUser: userId,
+          at: new Date(),
+          metadata: deductFromWallet ? { deductedFromWallet: true, vipMultiplierApplied: applyVipMultiplier } : {},
+        },
+      },
     };
 
-    const updatedBubble = await Bubble.findByIdAndUpdate(
-      bubbleId,
-      {
-        $set: {
-          oxygenLevel: newOxygen,
-          lastOxygenDecayCheck: new Date(),
-        },
-        $push: { oxygenInjections: injection },
-      },
-            { returnDocument: 'after' }
+    // Se for sopro, adiciona proteção $nin + addToSet
+    if (addToSoprosArray) {
+      updateOps.$addToSet = { sopros: userId };
+    }
+
+    // Barreira de segurança: só atualiza se a bolha estiver viva e
+    // se o usuário ainda não soprou (quando addToSoprosArray=true)
+    const matchFilter = {
+      _id: bubbleId,
+      oxygenLevel: { $gt: 0 },
+    };
+
+    if (addToSoprosArray) {
+      matchFilter.sopros = { $nin: [userId] };
+    }
+
+    const updatedBubble = await Bubble.findOneAndUpdate(
+      matchFilter,
+      updateOps,
+      { returnDocument: 'after' }
     );
 
-    // Sincroniza expiresAt
-    const decayRate = updatedBubble.oxygenDecayRate || OXYGEN.DECAY_RATE_DEFAULT;
-    if (newOxygen > 0) {
-      const hoursRemaining = newOxygen / decayRate;
-      updatedBubble.expiresAt = new Date(Date.now() + hoursRemaining * 60 * 60 * 1000);
-      await Bubble.findByIdAndUpdate(bubbleId, {
-        $set: { expiresAt: updatedBubble.expiresAt }
-      });
+    // Se retornou null, a condição $nin falhou → usuário já soprou
+    if (!updatedBubble) {
+      if (addToSoprosArray) {
+        logger.warn('Conflito de sopro (duplicata):', { userId, bubbleId });
+      }
+      return null;
     }
+
+    // Aplica decaimento pendente antes de recalcular expiresAt
+    const maxOxygen = updatedBubble.maxOxygen || OXYGEN.MAX_DEFAULT;
+    const newOxygen = Math.min(maxOxygen, updatedBubble.oxygenLevel);
+
+    // Sincroniza expiresAt como campo derivado
+    const decayRate = updatedBubble.oxygenDecayRate || OXYGEN.DECAY_RATE_DEFAULT;
+    const expiresAt = newOxygen > 0
+      ? new Date(Date.now() + (newOxygen / decayRate) * 60 * 60 * 1000)
+      : new Date();
+
+    await Bubble.findByIdAndUpdate(bubbleId, {
+      $set: {
+        oxygenLevel: newOxygen,
+        expiresAt,
+      }
+    });
+
+    updatedBubble.oxygenLevel = newOxygen;
+    updatedBubble.expiresAt = expiresAt;
 
     return updatedBubble;
   } catch (error) {

@@ -66,16 +66,20 @@ const logger = winston.createLogger({
 const httpLoggerMiddleware = (req, res, next) => {
   const start = Date.now();
   
+  // Adiciona um ID único de correlação para rastrear requisições
+  req.requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
   res.on('finish', () => {
     const duration = Date.now() - start;
     
     logger.http({
       type: 'HTTP',
+      requestId: req.requestId,
       method: req.method,
       url: req.originalUrl,
       status: res.statusCode,
       duration: `${duration}ms`,
-      userId: req.user?._id || 'anonymous',
+      userId: req.user?._id?.toString() || 'anonymous',
       ip: req.ip,
       userAgent: req.get('user-agent')
     });

@@ -15,7 +15,7 @@ const { limits } = require('../middlewares/rateLimitPerUser');
 const { validateComment } = require('../middlewares/sanitizeInput');
 
 // Sênior: Importamos os wrappers tratados do Multer para evitar quebras brutas de disco
-const { uploadCover } = require('../middlewares/uploadMiddleware');
+const { uploadBubbleMedia } = require('../middlewares/uploadMiddleware');
 
 // ============================================================
 // 1. ROTAS PÚBLICAS / HÍBRIDAS (Usa optionalAuth para ler estados de curtidas)
@@ -32,7 +32,7 @@ router.get('/leaked', optionalAuth, bubbleController.getLeakedBubbles);
 // ============================================================
 
 // Criar Bolha: Rate Limiter -> Processamento de arquivo seguro com tratamento -> Validação -> Controller
-router.post('/', protect, limits.bubbleCreation, uploadCover, bubbleController.createBubble);
+router.post('/', protect, limits.bubbleCreation, uploadBubbleMedia, bubbleController.createBubble);
 
 // Minhas Bolhas: Histórico de bolhas do próprio usuário (vivas e estouradas de até 7 dias)
 router.get('/my', protect, bubbleController.getMyBubbles);

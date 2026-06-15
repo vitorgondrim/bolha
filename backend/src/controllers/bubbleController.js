@@ -15,23 +15,10 @@ const { resetDailySoprosIfNeeded } = require('../utils/soproUtils');
 
 const logger = require('../utils/logger');
 const { deleteOldFile } = require('./uploadController');
+const { createNotification } = require('../services/notificationService');
 const { bubbleSchema } = require('../../../shared/schemas/bubbleSchema');
 
 const LEAK_SCORE_THRESHOLD = parseInt(process.env.LEAK_SCORE_THRESHOLD, 10) || 12;
-
-// ============================================================
-// FUNÇÕES AUXILIARES CONFIÁVEIS
-// ============================================================
-
-const createNotification = async (io, data) => {
-  try {
-    const notification = await Notification.create(data);
-    if (io) io.to(`user_${data.recipient}`).emit('new_notification', notification);
-    return notification;
-  } catch (error) {
-    logger.error('Erro ao criar notificacao:', { error: error.message });
-  }
-};
 
 const calculateEngagementScore = (bubble) => {
   const likesCount = bubble.likes?.length || 0;
@@ -105,9 +92,10 @@ exports.createBubble = async (req, res, next) => {
       isAnonymous,
     };
     
+    // Suporta tanto o campo 'media' (upload via middleware) quanto o campo 'image' (compatibilidade frontend)
     if (req.file && req.file.cloudinaryUrl) {
       bubbleData.mediaUrl = req.file.cloudinaryUrl;
-      bubbleData.mediaType = req.file.mimetype.includes('gif') ? 'gif' : 'image';
+      bubbleData.mediaType = req.file.mimetype?.includes('gif') ? 'gif' : 'image';
     } else if (mediaUrl && mediaUrl.trim()) {
       bubbleData.mediaUrl = mediaUrl.trim();
       bubbleData.mediaType = mediaType || (mediaUrl.includes('.gif') ? 'gif' : 'image');
@@ -447,7 +435,7 @@ exports.toggleDislike = async (req, res, next) => {
 };
 
 // ============================================================
-// 9. SOPRO (REFATORADO: OPERAÇÃO ATÔMICA ÚNICA via findOneAndUpdate)
+// 9. SOPRO (REFATORADO: OPERAÇÃO ATÔMICA VIA SERVICE LAYER)
 // ============================================================
 exports.useSopro = async (req, res, next) => {
   try {
@@ -474,6 +462,7 @@ exports.useSopro = async (req, res, next) => {
     // ============================================================
     let dailyLimit = 3;
     let applyVipMultiplier = false;
+    let walletOxygenMultiplier = 1.0;
 
     try {
       const wallet = await Wallet.findOne({ user: userId }).lean();
@@ -485,6 +474,7 @@ exports.useSopro = async (req, res, next) => {
       if (isVipActive) {
         dailyLimit = wallet.dailySoproLimit || 3;
         applyVipMultiplier = true;
+        walletOxygenMultiplier = wallet.oxygenMultiplier || 1.0;
       }
     } catch (walletErr) {
       logger.warn('Falha ao buscar Wallet para limite VIP, usando padrao:', { userId, error: walletErr.message });
@@ -530,104 +520,42 @@ exports.useSopro = async (req, res, next) => {
     }
 
     // ============================================================
-    // FASE 4: OPERAÇÃO ATÔMICA NA BOLHA + DÉBITO WALLET (se for o caso)
-    //
-    // Padrão: findOneAndUpdate com filtro condicional ($nin).
-    // Se o userId já estiver no array sopros, a query falha e
-    // retorna null → 409 Conflict.
+    // FASE 4: Usa o bubbleService.injectOxygen para injeção atômica
     // ============================================================
+        const { injectOxygen } = require('../services/bubbleService');
 
-    const OXYGEN_BASE = 40;
-    let oxygenAmount = OXYGEN_BASE;
+    const updatedBubble = await injectOxygen({
+      bubbleId,
+      userId,
+      source: 'sopro',
+      deductFromWallet: usedPurchasedSopro,
+      applyVipMultiplier: applyVipMultiplier && usedPurchasedSopro,
+      addToSoprosArray: true,
+    });
 
-    // Se for sopro comprado, debita da Wallet primeiro (também atômico)
-    if (usedPurchasedSopro) {
-      try {
-        const wallet = await Wallet.atomicDebit(userId, 1, {
-          description: `Sopro na bolha ${bubbleId}`,
-          referenceId: bubbleId,
-          referenceModel: 'Bubble',
-          metadata: { source: 'sopro' },
-        });
-
-        if (!wallet) {
-          // Estorna contadores do usuário
-          await User.findByIdAndUpdate(userId, { $inc: { soprosPurchased: 1, totalSoprosGiven: -1 } });
-          logger.warn('Saldo insuficiente na wallet para sopro:', { userId, bubbleId });
-          return res.status(400).json({ message: 'Saldo insuficiente na carteira' });
-        }
-
-        // Aplica multiplicador VIP
-        if (applyVipMultiplier && wallet.oxygenMultiplier) {
-          oxygenAmount = Math.round(OXYGEN_BASE * wallet.oxygenMultiplier);
-        }
-      } catch (walletErr) {
-        await User.findByIdAndUpdate(userId, { $inc: { soprosPurchased: 1, totalSoprosGiven: -1 } });
-        throw walletErr;
-      }
-    }
-
-    // ─── OPERAÇÃO ATÔMICA PRINCIPAL ─────────────────────────────
-    // findOneAndUpdate com $nin: SÓ atualiza se userId NÃO estiver em sopros
-    // Combina $addToSet (sopros) + $inc (oxygenLevel) numa única query atômica
-    const updatedBubble = await Bubble.findOneAndUpdate(
-      {
-        _id: bubbleId,
-        sopros: { $nin: [userId] },       // ← BARREIRA ATÔMICA: só prossegue se userId NÃO está no array
-        expiresAt: { $gt: new Date() },    // Revalida vida da bolha no momento da escrita
-      },
-      {
-        $addToSet: { sopros: userId },                          // Adiciona userId ao array sopros
-        $inc: { oxygenLevel: oxygenAmount },                    // Incrementa oxigênio
-        $set: { lastOxygenDecayCheck: new Date() },             // Atualiza timestamp de decaimento
-      },
-            { returnDocument: 'after' }
-    );
-
-    // ─── CONFLICT DETECTION ─────────────────────────────────────
-    // Se retornou null, a condição $nin falhou → usuário já soprou
-    // (outra requisição concorrente chegou primeiro)
+    // ─── CONFLICT / ERROR DETECTION ────────────────────────────
     if (!updatedBubble) {
       // Estorna os contadores do usuário (rollback)
-      if (usedPurchasedSopro) {
-        await User.findByIdAndUpdate(userId, { $inc: { soprosPurchased: 1, totalSoprosGiven: -1 } });
-      } else {
-        await User.findByIdAndUpdate(userId, { $inc: { dailySoprosUsed: -1, totalSoprosGiven: -1 } });
-      }
+      await rollbackUserCounters(userId, usedPurchasedSopro);
 
-      logger.warn('409 - Sopro concorrente rejeitado (usuario ja soprou):', { userId, bubbleId });
+      logger.warn('Sopro rejeitado — bolha morta ou ja soprada:', { userId, bubbleId });
       return res.status(409).json({
-        message: 'Você já soprou nesta bolha.',
+        message: 'Você já soprou nesta bolha ou ela não está mais ativa.',
         code: 'DUPLICATE_SOPRO',
       });
     }
 
-    // Registra a injeção no histórico (operação separada, sem condição de corrida)
-    await Bubble.findByIdAndUpdate(bubbleId, {
-      $push: {
-        oxygenInjections: {
-          source: 'sopro',
-          amount: oxygenAmount,
-          byUser: userId,
-          at: new Date(),
-          metadata: usedPurchasedSopro
-            ? { deductedFromWallet: true, vipMultiplierApplied: applyVipMultiplier }
-            : {},
-        },
-      },
-    });
-
-    // Recalcula expiresAt baseado no novo oxygenLevel
-    const decayRate = updatedBubble.oxygenDecayRate || 4.1667;
-    const newOxygen = updatedBubble.oxygenLevel;
-    if (newOxygen > 0) {
-      const hoursRemaining = newOxygen / decayRate;
-      const newExpiresAt = new Date(Date.now() + hoursRemaining * 60 * 60 * 1000);
-      updatedBubble.expiresAt = newExpiresAt;
-      await Bubble.findByIdAndUpdate(bubbleId, {
-        $set: { expiresAt: newExpiresAt },
-      });
+    // Se o injectOxygen lançou "Saldo insuficiente na carteira"
+    // (exceção propagada pelo Wallet.atomicDebit), tratamos aqui
+    if (updatedBubble._id === undefined || updatedBubble.oxygenLevel === undefined) {
+      await rollbackUserCounters(userId, usedPurchasedSopro);
+      return res.status(400).json({ message: 'Saldo insuficiente na carteira' });
     }
+
+    // Determina a quantidade real de oxigênio injetada
+    const oxygenAmount = applyVipMultiplier && usedPurchasedSopro
+      ? Math.round(40 * walletOxygenMultiplier)
+      : 40;
 
     // ============================================================
     // FASE 5: NOTIFICAÇÕES E EFEITOS SECUNDÁRIOS
@@ -642,7 +570,7 @@ exports.useSopro = async (req, res, next) => {
     });
 
     const wasCritical = (updatedBubble.oxygenLevel - oxygenAmount) <= 25;
-    if (wasCritical && !updatedBubble.hasLeaked) {
+    if (wasCritical && !updatedBubble.hasLeaked && userDoc) {
       await createNotification(req.io, {
         recipient: bubbleMeta.author,
         sender: userId,
@@ -663,9 +591,10 @@ exports.useSopro = async (req, res, next) => {
     // ============================================================
     // FASE 6: RESPOSTA
     // ============================================================
+    const soprosCount = updatedBubble.sopros?.length || 0;
     const updatePayload = {
       bubbleId: updatedBubble._id,
-      soprosCount: updatedBubble.sopros.length,
+      soprosCount,
       oxygenLevel: updatedBubble.oxygenLevel,
       expiresAt: updatedBubble.expiresAt,
       hasLeaked: updatedBubble.hasLeaked,
@@ -685,8 +614,30 @@ exports.useSopro = async (req, res, next) => {
       dailySoprosUsed: updatedUser.dailySoprosUsed || 0,
     });
   } catch (error) {
+    // Se o erro for "Saldo insuficiente na carteira", propaga como 400
+    if (error.message === 'Saldo insuficiente na carteira') {
+      await rollbackUserCounters(req.user?._id, true);
+      return res.status(400).json({ message: 'Saldo insuficiente na carteira' });
+    }
+
     logger.error('Erro no uso de sopro:', { userId: req.user?._id, bubbleId: req.params.id, error: error.message });
     return next(error);
+  }
+};
+
+/**
+ * Função auxiliar para estornar contadores do usuário em caso de rollback.
+ */
+const rollbackUserCounters = async (userId, usedPurchasedSopro) => {
+  if (!userId) return;
+  try {
+    if (usedPurchasedSopro) {
+      await User.findByIdAndUpdate(userId, { $inc: { soprosPurchased: 1, totalSoprosGiven: -1 } });
+    } else {
+      await User.findByIdAndUpdate(userId, { $inc: { dailySoprosUsed: -1, totalSoprosGiven: -1 } });
+    }
+  } catch (rollbackErr) {
+    logger.error('Falha no rollback de contadores do usuario:', { userId, error: rollbackErr.message });
   }
 };
 

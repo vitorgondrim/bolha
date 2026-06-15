@@ -228,58 +228,76 @@ walletSchema.methods.addTransaction = function ({
  * @returns {Object|null} Wallet atualizada ou null
  */
 walletSchema.statics.atomicDebit = async function (userId, cost = 1, transactionMeta = {}) {
+  // REFATORADO: Operação verdadeiramente atômica usando $set com campos calculados
+  // Em vez de uma segunda query para corrigir balanceBefore/balanceAfter,
+  // usamos o pipeline de agregação do MongoDB (findOneAndUpdate com pipeline)
+  // que permite calcular valores com $addFields antes de persistir.
+  const now = new Date();
+  const description = transactionMeta.description || 'Consumo de sopro';
+
   const wallet = await this.findOneAndUpdate(
     {
       user: userId,
       balance: { $gte: cost },
     },
-    {
-      $inc: {
-        balance: -cost,
-        lifetimeConsumed: cost,
-      },
-      $push: {
-        transactionHistory: {
-          type: 'consumption',
-          amount: -cost,
-          balanceBefore: null, // será preenchido abaixo
-          balanceAfter: null,
-          description: transactionMeta.description || 'Consumo de sopro',
-          referenceId: transactionMeta.referenceId || null,
-          referenceModel: transactionMeta.referenceModel || null,
-          metadata: transactionMeta.metadata || {},
-          createdAt: new Date(),
+    [
+      {
+        $set: {
+          balance: { $subtract: ['$balance', cost] },
+          lifetimeConsumed: { $add: ['$lifetimeConsumed', cost] },
+          transactionHistory: {
+            $concatArrays: [
+              { $ifNull: ['$transactionHistory', []] },
+              [
+                {
+                  $literal: {
+                    type: 'consumption',
+                    amount: -cost,
+                    description,
+                    referenceId: transactionMeta.referenceId || null,
+                    referenceModel: transactionMeta.referenceModel || null,
+                    metadata: transactionMeta.metadata || {},
+                    createdAt: now,
+                  },
+                },
+              ],
+            ],
+          },
         },
       },
-    },
+      {
+        $set: {
+          'transactionHistory': {
+            $map: {
+              input: '$transactionHistory',
+              as: 'tx',
+              in: {
+                $mergeObjects: [
+                  '$$tx',
+                  {
+                    $cond: {
+                      if: { $eq: ['$$tx.createdAt', now] },
+                      then: {
+                        balanceBefore: { $add: ['$balance', cost] },
+                        balanceAfter: '$balance',
+                      },
+                      else: {},
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    ],
     {
       new: true,
       select: 'balance lifetimeConsumed transactionHistory',
     }
   );
 
-  if (!wallet) {
-    return null; // Saldo insuficiente
-  }
-
-  // Corrige balanceBefore e balanceAfter no último item do histórico
-  // (o $push não permite calcular dinamicamente na mesma operação)
-  const lastTx = wallet.transactionHistory[wallet.transactionHistory.length - 1];
-  if (lastTx) {
-    lastTx.balanceBefore = wallet.balance + cost;
-    lastTx.balanceAfter = wallet.balance;
-    await this.updateOne(
-      { _id: wallet._id, 'transactionHistory.createdAt': lastTx.createdAt },
-      {
-        $set: {
-          'transactionHistory.$.balanceBefore': lastTx.balanceBefore,
-          'transactionHistory.$.balanceAfter': lastTx.balanceAfter,
-        },
-      }
-    );
-  }
-
-  return wallet;
+  return wallet; // Retorna null se saldo insuficiente
 };
 
 /**

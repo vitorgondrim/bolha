@@ -8,13 +8,24 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const logger = require('../utils/logger');
 
-// Sênior: Validação na inicialização.
-// Em produção, JWT_SECRET é obrigatório — o server.js já valida antes de subir.
+// Sênior: Validação na inicialização com chaves ISOLADAS.
+// Em produção, JWT_SECRET e JWT_REFRESH_SECRET são obrigatórios.
 // Em test, usamos fallback seguro para não quebrar a suíte de testes.
 const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-key' : null);
 if (!JWT_SECRET) {
   logger.error('ERRO CRITICO: JWT_SECRET nao esta definido nas variaveis de ambiente!');
   process.exit(1);
+}
+
+// [SEGURANÇA] JWT_REFRESH_SECRET DEVE ser diferente de JWT_SECRET para
+// mitigar escalada de privilégios se um dos tokens vazar.
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || (process.env.NODE_ENV === 'test' ? 'test-refresh-secret-key' : null);
+if (!JWT_REFRESH_SECRET) {
+  logger.error('ERRO CRITICO: JWT_REFRESH_SECRET nao esta definido! Use uma chave DIFERENTE de JWT_SECRET para isolamento de tokens.');
+  process.exit(1);
+}
+if (JWT_REFRESH_SECRET === JWT_SECRET) {
+  logger.warn('ALERTA DE SEGURANCA: JWT_REFRESH_SECRET e igual a JWT_SECRET. Isso anula o isolamento de chaves!');
 }
 
 /**

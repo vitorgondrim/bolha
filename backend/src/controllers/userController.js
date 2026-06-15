@@ -4,17 +4,8 @@ const Follow = require('../models/Follow');
 const Notification = require('../models/Notification');
 const { calculateBadges } = require('../utils/badgeUtils');
 const { resetDailySoprosIfNeeded } = require('../utils/soproUtils');
+const { createNotification } = require('../services/notificationService');
 const logger = require('../utils/logger');
-
-const createNotification = async (io, data) => {
-  try {
-    const notification = await Notification.create(data);
-    if (io) io.to(`user_${data.recipient}`).emit('new_notification', notification);
-    return notification;
-  } catch (error) {
-    logger.error('Erro ao criar notificacao:', { error: error.message });
-  }
-};
 
 const formatUserResponse = (userDoc, hasLeakedBubble = false) => {
   // CORRECAO: userDoc pode ser um documento Mongoose (com .toObject()) ou

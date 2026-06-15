@@ -204,6 +204,9 @@ module.exports = {
   uploadAvatar: handleSingleUpload('avatar', 'avatars'),
   // uploadCover: para capas de bubbles e de usuário (pasta "covers")
   uploadCover: handleSingleUpload('cover', 'covers'),
+  // uploadBubbleMedia: para mídia de bolhas (campo "media", pasta "bubbles")
+  // CORREÇÃO: Antes estava usando uploadCover para bolhas, que esperava campo 'cover'.
+  uploadBubbleMedia: handleSingleUpload('media', 'bubbles'),
   // Utilitários expostos para uso em controllers
   cloudinary,
   deleteFromCloudinary,

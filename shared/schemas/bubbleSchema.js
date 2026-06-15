@@ -8,7 +8,7 @@ const bubbleSchema = z.object({
 
   content: z.string()
     .min(1, 'O pensamento nao pode estar vazio')
-    .max(280, 'Maximo de 280 caracteres permitido')
+    .max(500, 'Maximo de 500 caracteres permitido')
     .refine(val => val.trim().length > 0, 'Nao pode ser apenas espacos')
     .transform(val => val.trim()),
 

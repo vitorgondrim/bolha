@@ -22,10 +22,13 @@ const generateToken = (userId) => {
 };
 
 const generateRefreshToken = (userId) => {
-  // Sênior: Uso obrigatório de chaves separadas para mitigar escalada de privilégios se o access token vazar
+  // [SEGURANÇA] Chave OBRIGATORIAMENTE diferente do access token.
+  // Se JWT_REFRESH_SECRET não estiver definido, o authMiddleware falha
+  // com erro crítico e o servidor não sobe — esse fallback NUNCA deve ser usado.
+  const refreshSecret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
   return jwt.sign(
     { id: userId, type: 'refresh' },
-    process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+    refreshSecret,
     { expiresIn: '7d' }
   );
 };
@@ -187,8 +190,9 @@ exports.refreshToken = async (req, res, next) => {
       return res.status(401).json({ message: 'Sessão inválida ou expirada.' });
     }
 
-    // Sênior: Decodifica usando a chave isolada de refresh tokens
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET);
+        // [SEGURANÇA] Usa a chave isolada de refresh tokens (nunca JWT_SECRET)
+    const refreshSecret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
+    const decoded = jwt.verify(refreshToken, refreshSecret);
     
     if (decoded.type !== 'refresh') {
       return res.status(401).json({ message: 'Token inválido.' });

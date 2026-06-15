@@ -34,10 +34,16 @@ const validateBubble = [
     .notEmpty().withMessage('Título é obrigatório')
     .isLength({ max: 60 }).withMessage('Título: máximo 60 caracteres'),
   
-  body('content')
+    body('content')
     .trim()
     .notEmpty().withMessage('Conteúdo é obrigatório')
-    .isLength({ max: 500 }).withMessage('Conteúdo: máximo 500 caracteres'),
+    .isLength({ max: 500 }).withMessage('Conteúdo: máximo 500 caracteres')
+    .custom((value) => {
+      if (!value || value.trim().length === 0) {
+        throw new Error('Conteúdo não pode ser apenas espaços em branco');
+      }
+      return true;
+    }),
   
   body('subject')
     .optional({ checkFalsy: true })

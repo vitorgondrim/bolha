@@ -178,6 +178,30 @@ try {
 }
 
 // ============================================================
+// VALIDAÇÃO DE SEGURANÇA — JWT Secrets
+// ============================================================
+// Garante que JWT_REFRESH_SECRET existe e é DIFERENTE de JWT_SECRET
+// para manter o isolamento de chaves entre access e refresh tokens.
+const jwtSecret = process.env.JWT_SECRET;
+const jwtRefreshSecret = process.env.JWT_REFRESH_SECRET;
+
+if (jwtSecret && jwtRefreshSecret) {
+  if (jwtSecret === jwtRefreshSecret) {
+    process.stderr.write('\n========================================\n');
+    process.stderr.write('[BOOTSTRAP::SECURITY] JWT_REFRESH_SECRET e JWT_SECRET sao IGUAIS!\n');
+    process.stderr.write('[BOOTSTRAP::SECURITY] Isso anula o isolamento de chaves.\n');
+    process.stderr.write('[BOOTSTRAP::SECURITY] Defina JWT_REFRESH_SECRET com uma chave DIFERENTE.\n');
+    process.stderr.write('========================================\n\n');
+  }
+} else if (!jwtRefreshSecret && jwtSecret) {
+  process.stderr.write('\n========================================\n');
+  process.stderr.write('[BOOTSTRAP::SECURITY] JWT_REFRESH_SECRET nao definido!\n');
+  process.stderr.write('[BOOTSTRAP::SECURITY] Usando JWT_SECRET como fallback (menos seguro).\n');
+  process.stderr.write('[BOOTSTRAP::SECURITY] Defina JWT_REFRESH_SECRET com uma chave DIFERENTE.\n');
+  process.stderr.write('========================================\n\n');
+}
+
+// ============================================================
 // WRAPPER PARA VERIFICAR CARREGAMENTO DE MÓDULOS
 // ============================================================
 // Monitora quanto tempo cada require leva para detectar
