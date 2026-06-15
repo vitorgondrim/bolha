@@ -30,7 +30,7 @@ export default function BubbleHUD({ children }) {
       </main>
 
       {/* HUD SUPERIOR ESQUERDO: Logo + Sopro */}
-      <header className="fixed top-4 left-4 z-30 flex items-center gap-2 pt-safe">
+      <header className="sopro-hud fixed top-4 left-4 z-30 flex items-center gap-2 pt-safe">
         <button
           onClick={() => navigate("/feed")}
           className="w-10 h-10 rounded-full bg-slate-900/70 border border-cyan-400/25 backdrop-blur-md flex items-center justify-center hover:border-cyan-400/40 transition-all"

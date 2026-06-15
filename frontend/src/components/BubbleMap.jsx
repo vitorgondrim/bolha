@@ -14,6 +14,15 @@ export default function BubbleMap({ bubbles, onBubbleClick }) {
   // Refs para física (acesso direto, sem re-render)
   const posRefs = useRef(new Map());
   const requestRef = useRef();
+  // Ref para rastrear se a animação está ativa (evita loops concorrentes)
+  const animationActiveRef = useRef(false);
+  // Ref para armazenar bubbles atual sem causar re-render no loop RAF
+  const bubblesRef = useRef(bubbles);
+
+  // Mantém bubblesRef sincronizado sem reexecutar o hook de animação
+  useEffect(() => {
+    bubblesRef.current = bubbles;
+  }, [bubbles]);
 
   // Estado apenas para controle de zoom/offset (UI externa)
   const [zoom] = useState(1);
@@ -34,9 +43,23 @@ export default function BubbleMap({ bubbles, onBubbleClick }) {
   }, [bubbles]);
 
   // Loop de física: Isolado do ciclo de render do React
+  // Otimizado com Page Visibility API para pausar em abas ocultas
   useEffect(() => {
     const animate = () => {
-      const bArray = Array.from(posRefs.current.entries());
+      // ─── CHECK 1: Aba oculta? Pausa o loop ─────────────────
+      if (document.hidden) {
+        requestRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
+      // ─── CHECK 2: Feed vazio? Mata o loop ──────────────────
+      const entries = posRefs.current.entries();
+      const bArray = Array.from(entries);
+      
+      if (bArray.length === 0) {
+        animationActiveRef.current = false;
+        return; // Não agenda próximo frame — loop morto
+      }
       
       bArray.forEach(([, p]) => {
         p.x += p.vx;
@@ -59,8 +82,33 @@ export default function BubbleMap({ bubbles, onBubbleClick }) {
       requestRef.current = requestAnimationFrame(animate);
     };
 
-    requestRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(requestRef.current);
+    // ─── HANDLER: Page Visibility API ────────────────────────────
+    // Quando a aba volta a ficar visível e o loop não está ativo,
+    // reativa a animação (desde que haja bubbles)
+    const handleVisibilityChange = () => {
+      if (!document.hidden && !animationActiveRef.current && bubblesRef.current.length > 0) {
+        animationActiveRef.current = true;
+        requestRef.current = requestAnimationFrame(animate);
+      }
+    };
+
+    // Registra listener de visibilidade
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Inicia o loop apenas se houver bubbles
+    if (bubbles.length > 0) {
+      animationActiveRef.current = true;
+      requestRef.current = requestAnimationFrame(animate);
+    }
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (requestRef.current) {
+        cancelAnimationFrame(requestRef.current);
+      }
+      animationActiveRef.current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

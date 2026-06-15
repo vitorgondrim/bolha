@@ -2,6 +2,7 @@
 // BOLHA - REDE SOCIAL EFÊMERA
 // Arquivo: middlewares/uploadMiddleware.js
 // Propósito: Interceptação Segura de Multipart Form-Data + Cloudinary
+//            Pipeline resiliente com rollback de arquivos órfãos
 // ============================================================
 
 const multer = require('multer');
@@ -104,23 +105,47 @@ const deleteFromCloudinary = async (url) => {
 };
 
 // ============================================================
+// HELPER: REMOVER ARQUIVO ÓRFÃO DO CLOUDINARY POR PUBLIC_ID
+// Usado internamente para rollback quando a criação do registro no DB falha
+// ============================================================
+const rollbackCloudinaryUpload = async (publicId) => {
+  if (!publicId) return;
+  try {
+    await cloudinary.uploader.destroy(publicId);
+  } catch (error) {
+    console.warn('Falha no rollback de arquivo órfão do Cloudinary:', { publicId, error: error.message });
+  }
+};
+
+// ============================================================
 // WRAPPER SÊNIOR: INTERCEPTADOR DE ERROS DO MULTER + CLOUDINARY
 // Traduz falhas do Multer e Cloudinary para respostas limpas
+// Pipeline resiliente com rollback de arquivos órfãos
 // ============================================================
 const handleSingleUpload = (fieldName, folder) => {
   const uploadMiddleware = uploadConfig.single(fieldName);
 
   return (req, res, next) => {
     uploadMiddleware(req, res, async (err) => {
+      // ─── FASE 1: Validação do Multer ─────────────────────────────
       if (err) {
         if (err instanceof multer.MulterError) {
           if (err.code === 'LIMIT_FILE_SIZE') {
-            return res.status(413).json({ message: 'Arquivo grande demais. O limite máximo permitido é 5MB.' });
+            return res.status(413).json({
+              message: 'Arquivo grande demais. O limite máximo permitido é 5MB.',
+              code: 'FILE_TOO_LARGE',
+            });
           }
           if (err.code === 'LIMIT_UNEXPECTED_FILE') {
-            return res.status(400).json({ message: 'Formato inválido. Apenas mídias JPG, JPEG, PNG, GIF ou WEBP são permitidas.' });
+            return res.status(400).json({
+              message: 'Formato inválido. Apenas mídias JPG, JPEG, PNG, GIF ou WEBP são permitidas.',
+              code: 'INVALID_FILE_TYPE',
+            });
           }
-          return res.status(400).json({ message: `Erro no upload do arquivo: ${err.message}` });
+          return res.status(400).json({
+            message: `Erro no upload do arquivo: ${err.message}`,
+            code: 'UPLOAD_ERROR',
+          });
         }
         return next(err);
       }
@@ -128,18 +153,48 @@ const handleSingleUpload = (fieldName, folder) => {
       // Se não veio arquivo, segue o fluxo normal
       if (!req.file) return next();
 
+      // ─── FASE 2: Upload para Cloudinary ──────────────────────────
+      let cloudinaryResult;
       try {
-        // Faz o upload do buffer em memória para o Cloudinary
-        const result = await uploadToCloudinary(req.file.buffer, folder);
-
-        // Enriquece req.file com dados do Cloudinary para uso nos controllers
-        req.file.cloudinaryUrl = result.secure_url;
-        req.file.cloudinaryPublicId = result.public_id;
-
-        return next();
+        cloudinaryResult = await uploadToCloudinary(req.file.buffer, folder);
       } catch (uploadError) {
-        return res.status(500).json({ message: 'Erro ao enviar arquivo para a nuvem. Tente novamente.' });
+        // Graceful Degradation: não expõe detalhes de infraestrutura
+        return res.status(502).json({
+          message: 'Serviço de imagens temporariamente indisponível. Tente novamente em alguns instantes.',
+          code: 'CLOUDINARY_UPLOAD_FAILED',
+        });
       }
+
+      // Enriquece req.file com dados do Cloudinary para uso nos controllers
+      req.file.cloudinaryUrl = cloudinaryResult.secure_url;
+      req.file.cloudinaryPublicId = cloudinaryResult.public_id;
+
+      // ─── FASE 3: Interceptação do response para rollback ─────────
+      // Wrapper no res.json original para detectar falha na criação do registro
+      const originalJson = res.json.bind(res);
+      const originalStatus = res.status.bind(res);
+      let statusCode = 200;
+
+      res.status = function (code) {
+        statusCode = code;
+        return originalStatus(code);
+      };
+
+      res.json = function (body) {
+        // Se a resposta indicar erro do servidor (5xx) ou falha de validação crítica (422)
+        // que impede a criação do registro, faz rollback do arquivo no Cloudinary
+        if (statusCode >= 500 || (statusCode === 422 && !body?.success)) {
+          rollbackCloudinaryUpload(req.file.cloudinaryPublicId);
+        }
+
+        // Restaura os métodos originais para evitar interferência em chamadas subsequentes
+        res.status = originalStatus;
+        res.json = originalJson;
+
+        return originalJson(body);
+      };
+
+      return next();
     });
   };
 };

@@ -11,7 +11,8 @@ const Notification = require('../models/Notification');
 const Wallet = require('../models/Wallet');
 const { calculateBadges } = require('../utils/badgeUtils');
 const { resetDailySoprosIfNeeded } = require('../utils/soproUtils');
-const { injectOxygen } = require('../services/bubbleService');
+
+
 const logger = require('../utils/logger');
 const { deleteOldFile } = require('./uploadController');
 const { bubbleSchema } = require('../../../shared/schemas/bubbleSchema');
@@ -446,30 +447,21 @@ exports.toggleDislike = async (req, res, next) => {
 };
 
 // ============================================================
-// 9. SOPRO (REFATORADO: Validação Atômica + Wallet + VIP)
+// 9. SOPRO (REFATORADO: OPERAÇÃO ATÔMICA ÚNICA via findOneAndUpdate)
 // ============================================================
 exports.useSopro = async (req, res, next) => {
   try {
     const bubbleId = req.params.id;
     const userId = req.user._id;
-    
-    const bubble = await Bubble.findById(bubbleId);
-    if (!bubble || bubble.expiresAt < new Date()) {
-      return res.status(444).json({ message: 'Essa bolha já estourou!' });
-    }
 
-    if (bubble.author.toString() === userId.toString()) {
+    // Validação de autor (regra de negócio estável, sem condição de corrida)
+    const bubbleMeta = req.bubbleMeta;
+    if (bubbleMeta.author.toString() === userId.toString()) {
       return res.status(400).json({ message: 'Você não pode usar sopro na sua própria bolha.' });
-    }
-    if (bubble.sopros.includes(userId)) {
-      return res.status(400).json({ message: 'Você já usou um sopro nesta bolha.' });
     }
 
     // ============================================================
     // FASE 1: RESETA CONTADOR DIÁRIO SE NECESSÁRIO
-    // CORRECAO: req.user vem de .lean() (objeto plano). Precisamos de
-    // um documento Mongoose real para usar .save() no resetDailySoprosIfNeeded.
-    // Buscamos o usuário completo do banco.
     // ============================================================
     const userDoc = await User.findById(userId);
     if (!userDoc) {
@@ -485,7 +477,6 @@ exports.useSopro = async (req, res, next) => {
 
     try {
       const wallet = await Wallet.findOne({ user: userId }).lean();
-      // Verificação inline de VIP ativo
       const isVipActive = wallet &&
         wallet.vipStatus !== 'none' &&
         wallet.vipExpiresAt &&
@@ -500,13 +491,9 @@ exports.useSopro = async (req, res, next) => {
     }
 
     // ============================================================
-    // FASE 3: TENTATIVA ATÔMICA — Prioridade: Diário > Comprado > Wallet
+    // FASE 3: TENTATIVA ATÔMICA — Prioridade: Diário > Comprado
     // ============================================================
 
-    // CORRECAO: User.findOneAndUpdate não retorna documento Mongoose com .save().
-    // Usamos userDoc que já é documento real e foi atualizado pelo resetDailySoprosIfNeeded.
-    // A partir daqui usamos findOneAndUpdate para as operações atômicas.
-    
     // 3a. Tenta usar sopro diário (findOneAndUpdate com barreira $lt)
     let updatedUser = await User.findOneAndUpdate(
       {
@@ -543,69 +530,142 @@ exports.useSopro = async (req, res, next) => {
     }
 
     // ============================================================
-    // FASE 4: INJETA OXIGÊNIO VIA BUBBLE SERVICE (com wallet se comprado)
+    // FASE 4: OPERAÇÃO ATÔMICA NA BOLHA + DÉBITO WALLET (se for o caso)
+    //
+    // Padrão: findOneAndUpdate com filtro condicional ($nin).
+    // Se o userId já estiver no array sopros, a query falha e
+    // retorna null → 409 Conflict.
     // ============================================================
-    let updatedBubble;
-    
+
+    const OXYGEN_BASE = 40;
+    let oxygenAmount = OXYGEN_BASE;
+
+    // Se for sopro comprado, debita da Wallet primeiro (também atômico)
     if (usedPurchasedSopro) {
-      // Sopro comprado → débito atômico via Wallet + multiplicador VIP
-      updatedBubble = await injectOxygen({
-        bubbleId,
-        userId,
-        source: 'sopro',
-        deductFromWallet: true,
-        applyVipMultiplier,
-      });
-    } else {
-      // Sopro diário → injeção direta (sem débito na wallet)
-      updatedBubble = await injectOxygen({
-        bubbleId,
-        userId,
-        source: 'sopro',
-        customAmount: 40,
-        deductFromWallet: false,
-      });
+      try {
+        const wallet = await Wallet.atomicDebit(userId, 1, {
+          description: `Sopro na bolha ${bubbleId}`,
+          referenceId: bubbleId,
+          referenceModel: 'Bubble',
+          metadata: { source: 'sopro' },
+        });
+
+        if (!wallet) {
+          // Estorna contadores do usuário
+          await User.findByIdAndUpdate(userId, { $inc: { soprosPurchased: 1, totalSoprosGiven: -1 } });
+          logger.warn('Saldo insuficiente na wallet para sopro:', { userId, bubbleId });
+          return res.status(400).json({ message: 'Saldo insuficiente na carteira' });
+        }
+
+        // Aplica multiplicador VIP
+        if (applyVipMultiplier && wallet.oxygenMultiplier) {
+          oxygenAmount = Math.round(OXYGEN_BASE * wallet.oxygenMultiplier);
+        }
+      } catch (walletErr) {
+        await User.findByIdAndUpdate(userId, { $inc: { soprosPurchased: 1, totalSoprosGiven: -1 } });
+        throw walletErr;
+      }
     }
 
+    // ─── OPERAÇÃO ATÔMICA PRINCIPAL ─────────────────────────────
+    // findOneAndUpdate com $nin: SÓ atualiza se userId NÃO estiver em sopros
+    // Combina $addToSet (sopros) + $inc (oxygenLevel) numa única query atômica
+    const updatedBubble = await Bubble.findOneAndUpdate(
+      {
+        _id: bubbleId,
+        sopros: { $nin: [userId] },       // ← BARREIRA ATÔMICA: só prossegue se userId NÃO está no array
+        expiresAt: { $gt: new Date() },    // Revalida vida da bolha no momento da escrita
+      },
+      {
+        $addToSet: { sopros: userId },                          // Adiciona userId ao array sopros
+        $inc: { oxygenLevel: oxygenAmount },                    // Incrementa oxigênio
+        $set: { lastOxygenDecayCheck: new Date() },             // Atualiza timestamp de decaimento
+      },
+      { new: true }
+    );
+
+    // ─── CONFLICT DETECTION ─────────────────────────────────────
+    // Se retornou null, a condição $nin falhou → usuário já soprou
+    // (outra requisição concorrente chegou primeiro)
     if (!updatedBubble) {
-      throw new Error('Falha ao injetar oxigenio na bolha');
+      // Estorna os contadores do usuário (rollback)
+      if (usedPurchasedSopro) {
+        await User.findByIdAndUpdate(userId, { $inc: { soprosPurchased: 1, totalSoprosGiven: -1 } });
+      } else {
+        await User.findByIdAndUpdate(userId, { $inc: { dailySoprosUsed: -1, totalSoprosGiven: -1 } });
+      }
+
+      logger.warn('409 - Sopro concorrente rejeitado (usuario ja soprou):', { userId, bubbleId });
+      return res.status(409).json({
+        message: 'Você já soprou nesta bolha.',
+        code: 'DUPLICATE_SOPRO',
+      });
     }
 
-    // ============================================================
-    // FASE 5: REGISTRO DA AÇÃO E NOTIFICAÇÕES
-    // ============================================================
+    // Registra a injeção no histórico (operação separada, sem condição de corrida)
     await Bubble.findByIdAndUpdate(bubbleId, {
-      $addToSet: { sopros: userId },
+      $push: {
+        oxygenInjections: {
+          source: 'sopro',
+          amount: oxygenAmount,
+          byUser: userId,
+          at: new Date(),
+          metadata: usedPurchasedSopro
+            ? { deductedFromWallet: true, vipMultiplierApplied: applyVipMultiplier }
+            : {},
+        },
+      },
     });
 
-        await createNotification(req.io, {
-      recipient: bubble.author,
+    // Recalcula expiresAt baseado no novo oxygenLevel
+    const decayRate = updatedBubble.oxygenDecayRate || 4.1667;
+    const newOxygen = updatedBubble.oxygenLevel;
+    if (newOxygen > 0) {
+      const hoursRemaining = newOxygen / decayRate;
+      const newExpiresAt = new Date(Date.now() + hoursRemaining * 60 * 60 * 1000);
+      updatedBubble.expiresAt = newExpiresAt;
+      await Bubble.findByIdAndUpdate(bubbleId, {
+        $set: { expiresAt: newExpiresAt },
+      });
+    }
+
+    // ============================================================
+    // FASE 5: NOTIFICAÇÕES E EFEITOS SECUNDÁRIOS
+    // ============================================================
+
+    await createNotification(req.io, {
+      recipient: bubbleMeta.author,
       sender: userId,
       type: 'sopro',
-      bubbleId: bubble._id,
+      bubbleId: bubbleId,
       content: '💨 Sua bolha recebeu um SOPRO VITAL! +40 de oxigênio!'
     });
 
-    const wasCritical = updatedBubble.oxygenLevel <= 25;
+    const wasCritical = (updatedBubble.oxygenLevel - oxygenAmount) <= 25;
     if (wasCritical && !updatedBubble.hasLeaked) {
       await createNotification(req.io, {
-        recipient: updatedBubble.author,
+        recipient: bubbleMeta.author,
         sender: userId,
         type: 'saved_from_expiry',
-        bubbleId: updatedBubble._id,
+        bubbleId: bubbleId,
         content: `🎉 MILAGRE! ${userDoc.username} salvou sua bolha no último minuto!`
       });
     }
 
     await checkForLeak(updatedBubble, req.io);
-    await updateSurvivorRecord(updatedUser, updatedBubble);
 
-        // ============================================================
-    // FASE 6: RESPOSTA — Inclui dailySoprosUsed para o frontend atualizar o contador
+    // Atualiza recorde de sobrevivência do autor
+    const authorUser = await User.findById(bubbleMeta.author);
+    if (authorUser) {
+      await updateSurvivorRecord(authorUser, updatedBubble);
+    }
+
+    // ============================================================
+    // FASE 6: RESPOSTA
     // ============================================================
     const updatePayload = {
       bubbleId: updatedBubble._id,
-      soprosCount: (updatedBubble.sopros?.length || 0) + 1,
+      soprosCount: updatedBubble.sopros.length,
       oxygenLevel: updatedBubble.oxygenLevel,
       expiresAt: updatedBubble.expiresAt,
       hasLeaked: updatedBubble.hasLeaked,
@@ -617,15 +677,15 @@ exports.useSopro = async (req, res, next) => {
     return res.json({
       success: true,
       message: usedPurchasedSopro
-        ? `💨 Sopro VIP usado! +${Math.round(40 * (applyVipMultiplier ? 1.5 : 1))} de oxigênio!`
+        ? `💨 Sopro VIP usado! +${oxygenAmount} de oxigênio!`
         : '💨 Sopro usado! +40 de oxigênio!',
       ...updatePayload,
       remainingDaily: Math.max(0, dailyLimit - (updatedUser.dailySoprosUsed || 0)),
       purchasedSopros: updatedUser.soprosPurchased || 0,
-      dailySoprosUsed: updatedUser.dailySoprosUsed || 0, // 🔥 NOVO: permite frontend atualizar contador instantaneamente
+      dailySoprosUsed: updatedUser.dailySoprosUsed || 0,
     });
   } catch (error) {
-    logger.error('Erro no uso de sopro:', { userId: req.user?._id, bubbleId: req.bubble?._id, error: error.message });
+    logger.error('Erro no uso de sopro:', { userId: req.user?._id, bubbleId: req.params.id, error: error.message });
     return next(error);
   }
 };

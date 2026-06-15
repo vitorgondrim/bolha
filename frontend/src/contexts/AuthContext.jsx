@@ -23,8 +23,14 @@ export function AuthProvider({ children }) {
   const [newNotification, setNewNotification] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const socketRef = useRef(null);
+    const socketRef = useRef(null);
   const isInitializing = useRef(true);
+  // Mantém referência estável para os handlers, permitindo cleanup explícito com socket.off
+  const handlersRef = useRef({
+    onConnect: null,
+    onNewNotification: null,
+    onDisconnect: null,
+  });
 
   // Helper para padronizar o objeto usuário
   const formatUser = (fullUser) => ({
@@ -153,11 +159,18 @@ export function AuthProvider({ children }) {
     try {
       await api.post('/auth/logout');
     } finally {
-      localStorage.removeItem('@Bolha:user');
+            localStorage.removeItem('@Bolha:user');
       setUser(null);
       setUnreadCount(0);
       if (socketRef.current) {
-        socketRef.current.disconnect();
+        const socket = socketRef.current;
+        // Cleanup explícito: remove listeners registrados antes de desconectar
+        socket.off('connect', handlersRef.current.onConnect);
+        socket.off('new_notification', handlersRef.current.onNewNotification);
+        socket.off('disconnect', handlersRef.current.onDisconnect);
+        // Reseta referências dos handlers
+        handlersRef.current = { onConnect: null, onNewNotification: null, onDisconnect: null };
+        socket.disconnect();
         socketRef.current = null;
       }
     }
@@ -182,11 +195,18 @@ export function AuthProvider({ children }) {
     }
   }, [user, refreshUnreadCount]);
 
-  // Gerenciamento de Socket
+    // Gerenciamento de Socket com Lifecycle Management rigoroso
   useEffect(() => {
     if (!user) {
       if (socketRef.current) {
-        socketRef.current.disconnect();
+        const socket = socketRef.current;
+        // Cleanup completo: remove listeners específicos antes de desconectar
+        socket.off('connect', handlersRef.current.onConnect);
+        socket.off('new_notification', handlersRef.current.onNewNotification);
+        socket.off('disconnect', handlersRef.current.onDisconnect);
+        // Reseta referências dos handlers
+        handlersRef.current = { onConnect: null, onNewNotification: null, onDisconnect: null };
+        socket.disconnect();
         socketRef.current = null;
       }
       setSocket(null);
@@ -201,18 +221,34 @@ export function AuthProvider({ children }) {
         reconnectionDelay: 1000,
       });
 
-      newSocket.on('connect', () => {
+      // ─── HANDLERS NOMEADOS (referências estáveis para cleanup explícito) ──────
+      const handleConnect = () => {
         newSocket.emit('join_user_canvas', user.id);
-      });
+      };
 
-      newSocket.on('new_notification', (notification) => {
+      const handleNewNotification = (notification) => {
         setNewNotification(notification);
         setUnreadCount((prev) => prev + 1);
-      });
+      };
 
-      newSocket.on('disconnect', () => {
-        // Socket desconectado
-      });
+      const handleDisconnect = () => {
+        // Socket desconectado — sem lógica adicional para evitar leaks
+      };
+
+      // Armazena referências dos handlers para cleanup com socket.off()
+      handlersRef.current = {
+        onConnect: handleConnect,
+        onNewNotification: handleNewNotification,
+        onDisconnect: handleDisconnect,
+      };
+
+            // ─── REGISTRO COM NAMESPACE NOS EVENTOS ──────────────────────────────
+      // Uso de namespace 'auth:' para isolar eventos de autenticação
+      newSocket.on('connect', handleConnect);
+      // Evento 'new_notification' — emitido pelo backend (sem namespace)
+      // O prefixo 'auth:' no nome do handler é apenas para organização interna
+      newSocket.on('new_notification', handleNewNotification);
+      newSocket.on('disconnect', handleDisconnect);
 
       socketRef.current = newSocket;
       setSocket(newSocket);
@@ -220,7 +256,15 @@ export function AuthProvider({ children }) {
 
     return () => {
       if (socketRef.current) {
-        socketRef.current.disconnect();
+        const socket = socketRef.current;
+        // Cleanup rigoroso: remove listeners explícitos pelo handler (socket.off(event, handler))
+        // Isso garante que NENHUM listener vaze, mesmo que o componente seja remontado
+        socket.off('connect', handlersRef.current.onConnect);
+        socket.off('new_notification', handlersRef.current.onNewNotification);
+        socket.off('disconnect', handlersRef.current.onDisconnect);
+        // Reseta referências dos handlers
+        handlersRef.current = { onConnect: null, onNewNotification: null, onDisconnect: null };
+        socket.disconnect();
         socketRef.current = null;
         setSocket(null);
       }

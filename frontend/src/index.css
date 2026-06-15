@@ -593,3 +593,105 @@
 body.feed-active {
   overflow: hidden;
 }
+
+/* ============================================================
+   ANIMAÇÕES ORGÂNICAS v2 — BARRA DE VIDA + DECAIMENTO
+   ============================================================ */
+
+@keyframes bar-glow-pulse {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes bar-critical-tremor {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-1px); }
+  75% { transform: translateX(1px); }
+}
+
+/* ============================================================
+   ANIMAÇÃO DE IMPLOSÃO — Quando bolha estoura
+   ============================================================ */
+@keyframes implode {
+  0% { transform: scale(1); opacity: 1; filter: blur(0px); }
+  40% { transform: scale(1.15); opacity: 0.8; filter: blur(1px); }
+  100% { transform: scale(0); opacity: 0; filter: blur(4px); }
+}
+
+.animate-implode {
+  animation: implode 0.6s cubic-bezier(0.7, 0.0, 1.0, 0.2) forwards;
+}
+
+/* ============================================================
+   ANIMAÇÃO DE NASCIMENTO — Gota d'água
+   ============================================================ */
+@keyframes spawn {
+  0% { transform: scale(0); opacity: 0; filter: blur(10px); }
+  30% { transform: scale(1.1); opacity: 0.6; filter: blur(2px); }
+  60% { transform: scale(0.95); opacity: 0.9; filter: blur(0px); }
+  100% { transform: scale(1); opacity: 1; filter: blur(0px); }
+}
+
+.animate-spawn {
+  animation: spawn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* ============================================================
+   CINTILAÇÃO — Glow flicker para bolhas morrendo*/
+
+@keyframes glow-flicker {
+  0%, 100% { opacity: 0.6; }
+  10% { opacity: 0.3; }
+  20% { opacity: 0.8; }
+  30% { opacity: 0.4; }
+  50% { opacity: 0.9; }
+  70% { opacity: 0.2; }
+  80% { opacity: 0.7; }
+}
+
+.animate-glow-flicker {
+  animation: glow-flicker 2s ease-in-out infinite;
+}
+
+/* ============================================================
+   ONDA DE ATENÇÃO — Anéis expansivos
+   ============================================================ */
+@keyframes attention-wave {
+  0% { transform: scale(0.8); opacity: 0.5; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+.animate-attention-wave {
+  animation: attention-wave 1.5s ease-out forwards;
+}
+
+/* ============================================================
+   DISSOLUÇÃO DE TEXTO — Conteúdo que desaparece
+   ============================================================ */
+@keyframes text-dissolve {
+  0% { opacity: 1; filter: blur(0px); }
+  100% { opacity: 0.1; filter: blur(3px); }
+}
+
+.animate-text-dissolve {
+  animation: text-dissolve 2s cubic-bezier(0.6, 0.0, 0.4, 1.0) forwards;
+}
+
+/* ============================================================
+   BARRA DE VIDA — Easing não-linear (cubic-bezier personalizado)
+   ============================================================ */
+.ease-decay {
+  transition-timing-function: cubic-bezier(0.6, 0.0, 0.4, 1.0);
+}
+
+/* ============================================================
+   PARTÍCULA DE SOPRO — Pequeno ponto de ar
+   ============================================================ */
+@keyframes sopro-particle {
+  0% { transform: translate(0, 0) scale(1); opacity: 0.8; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+}
+
+.animate-sopro-particle {
+  animation: sopro-particle 0.8s cubic-bezier(0.25, 0.1, 0.25, 1.0) forwards;
+}

@@ -1,0 +1,110 @@
+# ============================================================
+# BOLHA - CI/CD Pipeline
+# Plataforma: GitHub Actions
+# Stack: Node.js 20 + MongoDB + Vitest
+# Deploy: Render (condicional)
+# ============================================================
+
+name: Bolha CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# ─── Variáveis de ambiente globais ──────────────────────────
+env:
+  NODE_VERSION: '20'
+  BACKEND_DIR: ./backend
+
+jobs:
+  # ============================================================
+  # JOB 1: TEST (Continuous Integration)
+  # ============================================================
+  test:
+    name: CI - Testes de Integração
+    runs-on: ubuntu-latest
+
+    # ─── Service Container: MongoDB ─────────────────────────
+    # Provê um banco MongoDB real para os testes de integração.
+    # Os testes usam mongodb-memory-server como fallback, mas
+    # este service container garante disponibilidade total.
+    services:
+      mongodb:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd mongosh --eval "db.adminCommand('ping')"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # ─── 1. Checkout do código ────────────────────────────
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      # ─── 2. Setup do Node.js 20 com cache ────────────────
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: ./backend/package-lock.json
+
+      # ─── 3. Cache de node_modules ─────────────────────────
+      - name: Cache de node_modules
+        uses: actions/cache@v4
+        id: cache-node-modules
+        with:
+          path: ./backend/node_modules
+          key: ${{ runner.os }}-node-20-${{ hashFiles('./backend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-20-
+
+      # ─── 4. Instalação de dependências ────────────────────
+      - name: Instalar dependências
+        working-directory: ./backend
+        run: npm ci
+        # npm ci é mais rápido e determinístico que npm install em CI
+
+      # ─── 5. Execução dos testes ───────────────────────────
+      - name: Executar testes de integração
+        working-directory: ./backend
+        env:
+          # Conecta ao service container MongoDB
+          MONGODB_URI: mongodb://localhost:27017/bolha_test
+          NODE_ENV: test
+        run: npm run test:run
+
+  # ============================================================
+  # JOB 2: DEPLOY (Continuous Deployment - Condicional)
+  # Só executa se o job de testes passou com sucesso.
+  # ============================================================
+  deploy:
+    name: CD - Deploy no Render
+    needs: test
+    if: success() && github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      # ─── 1. Checkout (necessário para o deploy hook) ─────
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      # ─── 2. Disparar Deploy no Render via Webhook ────────
+      - name: Deploy no Render
+        run: |
+          echo "🚀 Disparando deploy no Render..."
+          curl -X POST \
+            -H "Accept: application/json" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+        # O Deploy Hook do Render é acionado via API REST.
+        # Secrets necessários no GitHub:
+        #   - RENDER_API_KEY: Token de API do Render
+        #   - RENDER_SERVICE_ID: ID do serviço no Render

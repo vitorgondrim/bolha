@@ -20,12 +20,14 @@
 import { useContext, useMemo, useCallback, useRef, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FixedSizeList as List } from 'react-window';
+import { List } from 'react-window';
 import { AuthContext } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useBubbles, useBubbleActions } from '../hooks/useBubbles';
+import useHapticFeedback from '../hooks/useHapticFeedback';
 import BubbleHUD from '../components/BubbleHUD';
 import OrganicBubble from '../components/bubbles/OrganicBubble';
+import { ConnectionLines, useSoproTrails, SoproTrailRenderer } from '../components/effects/SoproRippleEffect';
 
 // ═══════════════════════════════════════════════════════════════
 // CONSTANTES DE DENSIDADE
@@ -33,6 +35,18 @@ import OrganicBubble from '../components/bubbles/OrganicBubble';
 
 /** Número máximo de bolhas visíveis no canvas antes de podar */
 const MAX_BUBBLES_VISIBLE = 80;
+
+/** Calcula capacidade máxima baseada no viewport */
+const getMaxByViewport = () => {
+  if (typeof window === 'undefined') return MAX_BUBBLES_VISIBLE;
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const viewportArea = width * height;
+  // Cada bolha ocupa ~120x120px, densidade máxima de 15% da tela
+  const bubbleArea = 120 * 120;
+  const maxDensity = 0.15;
+  return Math.min(MAX_BUBBLES_VISIBLE, Math.floor((viewportArea * maxDensity) / bubbleArea));
+};
 
 /** Distância mínima entre centros de bolha (fração do raio viewport) */
 const COLLISION_PADDING_FACTOR = 0.022;
@@ -211,18 +225,21 @@ const getHeatColor = (intensity) => {
 // ═══════════════════════════════════════════════════════════════
 
 const BubbleItem = ({ bubble, style, user, onLike, onDislike, onSopro, onDelete, onComment, onOpen }) => {
+  // Atenção periférica do mouse: bolhas perto do cursor recebem boost
+  const [mouseAttention, setMouseAttention] = useState(0);
+
   return (
     <motion.div
       layout
       initial={{ scale: 0, opacity: 0 }}
       animate={{
-        scale: bubble._scale,
-        opacity: bubble._opacity,
+        scale: bubble._scale * (1 + mouseAttention * 0.05),
+        opacity: bubble._opacity + mouseAttention * 0.2,
         left: `${bubble._posX}%`,
         top: `${bubble._posY}%`,
         x: '-50%',
         y: '-50%',
-        filter: `blur(${bubble._depthBlur}px)`,
+        filter: `blur(${bubble._depthBlur * (1 - mouseAttention * 0.5)}px)`,
       }}
       exit={{
         scale: 0,
@@ -236,51 +253,12 @@ const BubbleItem = ({ bubble, style, user, onLike, onDislike, onSopro, onDelete,
         opacity: { duration: 0.8 },
         left: { duration: 1.2, ease: 'easeOut' },
         top: { duration: 1.2, ease: 'easeOut' },
-        filter: { duration: 1.0, ease: 'easeOut' },
+        filter: { duration: 0.6, ease: 'easeOut' },
       }}
       className="absolute will-change-transform"
       style={{ zIndex: bubble._zIndex, ...style }}
     >
-      <motion.div
-        className="relative"
-        animate={{
-          y: [0, -10, 0, -6, 0],
-          rotate: [0, 0.5, 0, -0.3, 0],
-        }}
-        transition={{
-          y: {
-            duration: 5 + (bubble._index % 4) * 1.2,
-            repeat: Infinity,
-            ease: 'easeInOut',
-            delay: bubble._floatDelay,
-          },
-          rotate: {
-            duration: 8 + (bubble._index % 6) * 0.8,
-            repeat: Infinity,
-            ease: 'easeInOut',
-            delay: bubble._driftDelay,
-          },
-        }}
-      >
-        {bubble._glowIntensity > 0.7 && (
-          <motion.div
-            className="absolute inset-0 rounded-full pointer-events-none"
-            animate={{
-              scale: [1, 1.15, 1],
-              opacity: [0.3, 0, 0.3],
-            }}
-            transition={{
-              duration: 2.5,
-              repeat: Infinity,
-              ease: 'easeOut',
-              delay: bubble._index * 0.2,
-            }}
-            style={{
-              boxShadow: `0 0 15px rgba(${bubble._color.rgb}, 0.3)`,
-            }}
-          />
-        )}
-
+      <motion.div className="relative">
         <OrganicBubble
           bubble={bubble}
           userId={user?._id}
@@ -304,17 +282,33 @@ export default function Feed() {
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
   const toast = useToast();
+  const haptic = useHapticFeedback();
   const canvasRef = useRef(null);
   const listRef = useRef(null);
+  const { trails, spawnTrail } = useSoproTrails();
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   const [maxVisible, setMaxVisible] = useState(MAX_BUBBLES_VISIBLE);
   const [viewportHeight, setViewportHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
 
-  // Atualiza viewportHeight no resize
+  // Atualiza viewportHeight e densidade máxima no resize
   useEffect(() => {
-    const handleResize = () => setViewportHeight(window.innerHeight);
+    const handleResize = () => {
+      setViewportHeight(window.innerHeight);
+      setMaxVisible(getMaxByViewport());
+    };
+    handleResize(); // calcula no mount também
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Rastreia posição do mouse para efeitos de atenção periférica
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      setMousePos({ x: e.clientX, y: e.clientY });
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
   const {
@@ -372,31 +366,49 @@ export default function Feed() {
 
   const handleLike = useCallback(
     (bubbleId) => {
-      try { likeBubble(bubbleId); } catch { toast.error('Erro ao curtir'); }
+      try {
+        likeBubble(bubbleId);
+        haptic.like();
+      } catch { toast.error('Erro ao curtir'); }
     },
-    [likeBubble, toast]
+    [likeBubble, toast, haptic]
   );
 
   const handleDislike = useCallback(
     (bubbleId) => {
-      try { dislikeBubble(bubbleId); } catch { toast.error('Erro ao dislikar'); }
+      try {
+        dislikeBubble(bubbleId);
+        haptic.dislike();
+      } catch { toast.error('Erro ao dislikar'); }
     },
-    [dislikeBubble, toast]
+    [dislikeBubble, toast, haptic]
   );
 
   const handleSopro = useCallback(
     (bubbleId) => {
-      try { soproBubble(bubbleId); } catch { toast.error('Erro ao soprar'); }
+      try {
+        soproBubble(bubbleId);
+        haptic.sopro();
+        // Cria trail visual de partículas de ar
+        const hudEl = document.querySelector('.sopro-hud');
+        if (hudEl) {
+          const hudRect = hudEl.getBoundingClientRect();
+          spawnTrail(hudRect.right, hudRect.top, mousePos.x, mousePos.y);
+        }
+      } catch { toast.error('Erro ao soprar'); }
     },
-    [soproBubble, toast]
+    [soproBubble, toast, haptic, spawnTrail, mousePos]
   );
 
   const handleDelete = useCallback(
     (bubbleId) => {
-      try { deleteBubble(bubbleId); toast.success('Bolha estourou! 💥'); }
-      catch { toast.error('Erro ao deletar'); }
+      try {
+        deleteBubble(bubbleId);
+        haptic.pop();
+        toast.success('Bolha estourou! 💥');
+      } catch { toast.error('Erro ao deletar'); }
     },
-    [deleteBubble, toast]
+    [deleteBubble, toast, haptic]
   );
 
   const handleComment = useCallback(
@@ -560,6 +572,12 @@ export default function Feed() {
         className="relative z-10 w-screen h-screen overflow-hidden"
         style={{ perspective: '1200px' }}
       >
+        {/* ─── CONEXÕES NEURAIS (SVG) — fios entre bolhas que o usuário interagiu ─── */}
+        <ConnectionLines bubbles={visibleBubbles} userId={user?._id} />
+
+        {/* ─── SOPRO TRAIL — partículas de ar viajando do HUD até a bolha ─── */}
+        <SoproTrailRenderer trails={trails} />
+
         <AnimatePresence mode="popLayout">
           <List
             ref={listRef}
