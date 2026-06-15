@@ -80,6 +80,8 @@ jobs:
           # Conecta ao service container MongoDB
           MONGODB_URI: mongodb://localhost:27017/bolha_test
           NODE_ENV: test
+          JWT_SECRET: test-ci-secret-key-para-pipeline
+          JWT_REFRESH_SECRET: test-ci-refresh-secret-key
         run: npm run test:run
 
   # ============================================================

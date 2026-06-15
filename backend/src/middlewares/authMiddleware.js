@@ -8,12 +8,13 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const logger = require('../utils/logger');
 
-// Sênior: Validação fail-fast na inicialização do arquivo. 
-// Evita funções de getter repetitivas e impede que a aplicação rode vulnerável.
-const JWT_SECRET = process.env.JWT_SECRET;
+// Sênior: Validação na inicialização.
+// Em produção, JWT_SECRET é obrigatório — o server.js já valida antes de subir.
+// Em test, usamos fallback seguro para não quebrar a suíte de testes.
+const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-key' : null);
 if (!JWT_SECRET) {
   logger.error('ERRO CRITICO: JWT_SECRET nao esta definido nas variaveis de ambiente!');
-  process.exit(1); // Encerra o processo imediatamente se a segurança estiver comprometida
+  process.exit(1);
 }
 
 /**
