@@ -110,9 +110,8 @@ const resolveCollisions = (bubbles) => {
 
 /**
  * Computa propriedades espaciais — GRAVIDADE + COLISÃO + PROFUNDIDADE
- * TODAS as bolhas são sempre visíveis no feed (sem ocultação por heat).
- * Apenas bolhas-mãe (parentBubble !== null) são filtradas pois ficam
- * dentro da bolha mãe.
+ * TODAS as bolhas são sempre visíveis no feed.
+ * Bolhas novas sem engajamento aparecem com tamanho reduzido mas visível.
  */
 const computeSpatialProps = (allBubbles, heats) => {
   if (!allBubbles?.length) return [];
@@ -122,25 +121,31 @@ const computeSpatialProps = (allBubbles, heats) => {
     const heat = heats[index];
     const normalized = heat / maxHeat;
 
-    const distance = 0.10 + Math.pow(1 - normalized, 1.5) * 0.80;
+    // Garante distancia minima para bolhas sem engajamento não irem pro infinito
+    const distance = 0.15 + Math.pow(1 - normalized, 1.5) * 0.70;
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
     const orbit = index * goldenAngle;
-    const scale = 0.50 + normalized * 1.0;
+    // Escala minima de 0.65 para nunca ficar invisível
+    const scale = 0.65 + normalized * 0.85;
     const radius = (0.50 + normalized * 0.70) * 5;
 
     const centerX = 50;
-    const centerY = 45;
-    const rawX = Math.cos(orbit) * distance * 38;
-    const rawY = Math.sin(orbit) * distance * 28;
+    const centerY = 48;
+    const maxRadiusX = 35;
+    const maxRadiusY = 25;
+    const rawX = Math.cos(orbit) * distance * maxRadiusX;
+    const rawY = Math.sin(orbit) * distance * maxRadiusY;
 
-    const distFromCenter = Math.sqrt(rawX * rawX + rawY * rawY) / 38;
-    const depthBlur = Math.pow(distFromCenter, 1.8) * MAX_DEPTH_BLUR;
+    const distFromCenter = Math.sqrt(rawX * rawX + rawY * rawY) / maxRadiusX;
+    // Blur máximo reduzido para bolhas periféricas
+    const depthBlur = Math.pow(distFromCenter, 1.8) * 3;
 
-    const distanceOpacity = 1.0 - Math.pow(distFromCenter, 1.5) * 0.6;
-    const opacity = (0.25 + normalized * 0.75) * distanceOpacity;
+    const distanceOpacity = 1.0 - Math.pow(distFromCenter, 1.5) * 0.4;
+    // Opacidade minima de 0.60 para nunca ficar invisível
+    const opacity = Math.max(0.60, (0.40 + normalized * 0.60) * distanceOpacity);
 
-    const depthScale = 1.0 - Math.pow(distFromCenter, 2) * (1 - MIN_PERIPHERY_SCALE);
-    const finalScale = scale * depthScale;
+    const depthScale = 1.0 - Math.pow(distFromCenter, 2) * 0.3;
+    const finalScale = Math.max(0.55, scale * depthScale);
 
     return {
       _id: bubble._id,
@@ -149,7 +154,7 @@ const computeSpatialProps = (allBubbles, heats) => {
       _scale: finalScale,
       _opacity: opacity,
       _zIndex: Math.round(normalized * 100),
-      _glowIntensity: normalized,
+      _glowIntensity: Math.max(0.3, normalized),
       _distance: distance,
       _orbit: orbit,
       _depthBlur: depthBlur,
@@ -158,8 +163,6 @@ const computeSpatialProps = (allBubbles, heats) => {
       x: rawX,
       y: rawY,
       radius: radius * depthScale,
-      _rawX: rawX,
-      _rawY: rawY,
       _floatDelay: (index % 7) * 0.6,
       _driftDelay: (index % 5) * 1.2,
     };
@@ -169,7 +172,7 @@ const computeSpatialProps = (allBubbles, heats) => {
 
   return resolvedPositions.map((item) => {
     const posX = 50 + item.x;
-    const posY = 45 + item.y;
+    const posY = 48 + item.y;
 
     return {
       ...item,
