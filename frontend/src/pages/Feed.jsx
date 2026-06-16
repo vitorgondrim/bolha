@@ -200,47 +200,30 @@ const getHeatColor = (intensity) => {
 
 const BubbleItem = React.memo(({ bubble, user, onLike, onDislike, onSopro, onDelete, onComment, onOpen }) => {
   return (
-    <motion.div
-      initial={{ scale: 0, opacity: 0 }}
-      animate={{
-        scale: bubble._scale,
-        opacity: bubble._opacity,
-        left: `${bubble._posX}%`,
-        top: `${bubble._posY}%`,
-        x: '-50%',
-        y: '-50%',
-        filter: `blur(${bubble._depthBlur}px)`,
+    <div
+      style={{
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: '200px',
+        height: '200px',
+        backgroundColor: '#FF0000',
+        border: '10px solid yellow',
+        borderRadius: '50%',
+        zIndex: 99999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'white',
+        fontWeight: 900,
+        fontSize: '20px',
+        textAlign: 'center',
+        opacity: 1,
       }}
-      exit={{
-        scale: 0,
-        opacity: 0,
-        filter: 'blur(0px)',
-        transition: { duration: 0.6, ease: 'easeInOut' },
-      }}
-      transition={{
-        scale: { duration: 1.0, ease: [0.34, 1.56, 0.64, 1] },
-        opacity: { duration: 0.8 },
-        left: { duration: 1.2, ease: 'easeOut' },
-        top: { duration: 1.2, ease: 'easeOut' },
-        filter: { duration: 0.6, ease: 'easeOut' },
-      }}
-      className="absolute will-change-transform"
-      style={{ zIndex: bubble._zIndex }}
     >
-      <motion.div className="relative">
-        <OrganicBubble
-          bubble={bubble}
-          userId={user?._id}
-          glowIntensity={bubble._glowIntensity}
-          onLike={onLike}
-          onDislike={onDislike}
-          onSopro={onSopro}
-          onDelete={onDelete}
-          onComment={onComment}
-          onOpen={onOpen}
-        />
-      </motion.div>
-    </motion.div>
+      DEBUG: ESTOU AQUI
+    </div>
   );
 });
 BubbleItem.displayName = 'BubbleItem';
@@ -251,6 +234,16 @@ BubbleItem.displayName = 'BubbleItem';
 export default function Feed() {
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
+
+  // 🐛 DEBUG ABSOLUTO - se este texto aparecer no DOM, o Feed.jsx está sendo renderizado
+  useEffect(() => {
+    const debugDiv = document.createElement('div');
+    debugDiv.id = 'feed-debug-marker';
+    debugDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:#FF0000;border:10px solid yellow;color:white;font-size:24px;font-weight:900;text-align:center;padding:20px';
+    debugDiv.textContent = '🔥 DEBUG: Feed.jsx FOI MONTADO 🔥';
+    document.body.appendChild(debugDiv);
+    return () => debugDiv.remove();
+  }, []);
   const toast = useToast();
   const haptic = useHapticFeedback();
   const canvasRef = useRef(null);

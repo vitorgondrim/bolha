@@ -103,10 +103,10 @@ export default function OrganicBubble({
       layout
       initial={{ scale: 0, opacity: 0 }}
       animate={{
-        scale: vitality.noisePulse,
-        opacity: vitality.bubbleOpacity,
-        y: vitality.noiseY,
-        rotate: vitality.noiseRotate,
+        scale: 1,
+        opacity: 1,
+        y: 0,
+        rotate: 0,
         width: bubbleSize,
         height: bubbleSize,
       }}
@@ -127,12 +127,18 @@ export default function OrganicBubble({
         width: { duration: 0.3, ease: 'easeOut' },
         height: { duration: 0.3, ease: 'easeOut' },
       }}
-      style={vitality.containerStyle}
+      style={{
+        ...vitality.containerStyle,
+        backgroundColor: '#FF0000',
+        border: '10px solid yellow',
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
+        opacity: '1',
+      }}
       className={`
         rounded-full aspect-square
         flex flex-col items-center justify-center
         text-center p-3
-        border
         cursor-pointer select-none
         relative
         overflow-hidden

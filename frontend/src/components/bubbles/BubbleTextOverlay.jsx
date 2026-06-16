@@ -28,6 +28,11 @@ const BubbleTextOverlay = memo(function BubbleTextOverlay({
       className="relative z-10 flex flex-col items-center justify-center w-full h-full mask-soft-edge px-2"
       style={textStyle}
     >
+      {/* ─── DEBUG: TEXTO DE TESTE DE VISIBILIDADE ─── */}
+      <p className="text-xs font-bold text-white leading-tight text-center break-words overflow-hidden" style={{ fontSize: '14px', fontWeight: 900, textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
+        DEBUG: ESTOU AQUI
+      </p>
+
       {/* ─── AUTOR (mini, topo) ─── */}
       <span className="text-[9px] font-bold text-cyan-300 leading-none mb-0.5 truncate max-w-[85%]">
         @{displayName}
