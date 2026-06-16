@@ -6,7 +6,7 @@
 // 3. Bolhas vizinhas balançam com o sopro (efeito borboleta)
 // ============================================================
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 let ringIdCounter = 0;
