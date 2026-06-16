@@ -134,6 +134,7 @@ const resolveCollisions = (bubbles) => {
  * Computa propriedades espaciais — GRAVIDADE + COLISÃO + PROFUNDIDADE
  */
 const computeSpatialProps = (allBubbles, heats, maxBubbles) => {
+  if (!allBubbles?.length) return [];
   const maxHeat = Math.max(...heats, 1);
 
   const rawProps = allBubbles.map((bubble, index) => {
@@ -336,6 +337,9 @@ export default function Feed() {
   // ENRIQUECE BOLHAS COM GESTÃO DE DENSIDADE
   // ═══════════════════════════════════════════════════════════════
   const { visibleBubbles, hiddenCount, densityInfo } = useMemo(() => {
+    if (!bubbles?.length) {
+      return { visibleBubbles: [], hiddenCount: 0, densityInfo: { total: 0, visible: 0, hidden: 0, threshold: 0 } };
+    }
     const heats = bubbles.map((b) => getBubbleHeat(b));
     const enriched = computeSpatialProps(bubbles, heats, maxVisible);
 
