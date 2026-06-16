@@ -587,6 +587,7 @@ export default function Feed() {
           overscanCount={OVERSCAN_COUNT}
           style={{ overflow: 'visible' }}
           className="absolute inset-0"
+          rowProps={{}}
         >
           {Row}
         </List>
