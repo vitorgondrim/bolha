@@ -125,8 +125,9 @@ const resolveCollisions = (bubbles) => {
 
 /**
  * Computa propriedades espaciais — GRAVIDADE + COLISÃO + PROFUNDIDADE
+ * @param {Object} user - Usuário logado (para sempre mostrar as próprias bolhas)
  */
-const computeSpatialProps = (allBubbles, heats, maxBubbles) => {
+const computeSpatialProps = (allBubbles, heats, maxBubbles, userId) => {
   if (!allBubbles?.length) return [];
   const maxHeat = Math.max(...heats, 1);
 
@@ -156,6 +157,7 @@ const computeSpatialProps = (allBubbles, heats, maxBubbles) => {
 
     return {
       _id: bubble._id,
+      authorId: bubble.author?._id || bubble.author,
       _heat: heat,
       _scale: finalScale,
       _opacity: opacity,
@@ -190,7 +192,9 @@ const computeSpatialProps = (allBubbles, heats, maxBubbles) => {
   return resolvedPositions.map((item) => {
     const posX = 50 + item.x;
     const posY = 45 + item.y;
-    const visible = hiddenThreshold < 0 || item._heat >= hiddenThreshold;
+    // Sempre mostra bolhas do próprio usuário mesmo se abaixo do threshold
+    const ownBubble = userId && item.authorId === userId;
+    const visible = ownBubble || hiddenThreshold < 0 || item._heat >= hiddenThreshold;
 
     return {
       ...item,
@@ -329,7 +333,7 @@ export default function Feed() {
       return { visibleBubbles: [], hiddenCount: 0, densityInfo: { total: 0, visible: 0, hidden: 0, threshold: 0 } };
     }
     const heats = bubbles.map((b) => getBubbleHeat(b));
-    const enriched = computeSpatialProps(bubbles, heats, maxVisible);
+    const enriched = computeSpatialProps(bubbles, heats, maxVisible, user?._id);
 
     const visible = enriched.filter((b) => b._visible);
     const hidden = enriched.length - visible.length;
