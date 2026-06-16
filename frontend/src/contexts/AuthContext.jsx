@@ -14,14 +14,23 @@ export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const storedUser = localStorage.getItem('@Bolha:user');
-    return storedUser ? JSON.parse(storedUser) : null;
+    try {
+      const storedUser = localStorage.getItem('@Bolha:user');
+      return storedUser ? JSON.parse(storedUser) : null;
+    } catch {
+      // localStorage corrompido — limpa e inicia sem usuário
+      localStorage.removeItem('@Bolha:user');
+      return null;
+    }
   });
 
   const [socket, setSocket] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [newNotification, setNewNotification] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Usar ref + callback para newNotification evita re-renders desnecessários
+  // em todos os consumers do AuthContext
+  const newNotificationRef = useRef(null);
+  const onNotificationCallbacksRef = useRef([]);
 
     const socketRef = useRef(null);
   const isInitializing = useRef(true);
@@ -229,8 +238,12 @@ export function AuthProvider({ children }) {
       };
 
       const handleNewNotification = (notification) => {
-        setNewNotification(notification);
+        newNotificationRef.current = notification;
         setUnreadCount((prev) => prev + 1);
+        // Notifica callbacks registrados (ex: Notifications page)
+        onNotificationCallbacksRef.current.forEach((cb) => {
+          try { cb(notification); } catch { /* ignore */ }
+        });
       };
 
       const handleDisconnect = () => {
@@ -273,6 +286,18 @@ export function AuthProvider({ children }) {
     };
   }, [user]);
 
+  /**
+   * Registra callback para receber notificações em tempo real.
+   * Retorna função de cleanup para remover o callback.
+   * Uso: useEffect(() => onNewNotification(handler), []) — NÃO re-renderiza o componente.
+   */
+  const subscribeToNotifications = useCallback((callback) => {
+    onNotificationCallbacksRef.current.push(callback);
+    return () => {
+      onNotificationCallbacksRef.current = onNotificationCallbacksRef.current.filter((cb) => cb !== callback);
+    };
+  }, []);
+
   const value = useMemo(() => ({
     user,
     loading,
@@ -287,8 +312,8 @@ export function AuthProvider({ children }) {
     refreshUnreadCount,
     socket,
     unreadCount,
-    newNotification
-  }), [user, loading, login, register, logout, refreshUser, revalidateAuth, authenticate, fetchProfile, refreshUnreadCount, socket, unreadCount, newNotification]);
+    subscribeToNotifications,
+  }), [user, loading, login, register, logout, refreshUser, revalidateAuth, authenticate, fetchProfile, refreshUnreadCount, socket, unreadCount, subscribeToNotifications]);
 
   return (
     <AuthContext.Provider value={value}>

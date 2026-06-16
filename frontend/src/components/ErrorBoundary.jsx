@@ -17,8 +17,13 @@ export default class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    // Em produção, aqui seria enviado para um serviço de erro (Sentry, etc.)
-    console.error('[ErrorBoundary] Erro capturado:', error, errorInfo);
+    // Em produção, envia para serviço de error monitoring (Sentry, etc.)
+    // Em desenvolvimento, loga no console para debug
+    if (import.meta.env.DEV) {
+      console.error('[ErrorBoundary] Erro capturado:', error, errorInfo);
+    }
+    // TODO: Integrar com Sentry ou serviço similar em produção
+    // Sentry.captureException(error, { extra: errorInfo });
   }
 
   handleReset = () => {
@@ -49,11 +54,11 @@ export default class ErrorBoundary extends Component {
               </p>
             </div>
 
-            {/* Detalhes do erro (desenvolvimento e produção para debug) */}
-            {this.state.error && (
+            {/* Detalhes do erro — apenas em desenvolvimento (segurança) */}
+            {import.meta.env.DEV && this.state.error && (
               <div className="rounded-2xl bg-rose-950/50 border border-rose-500/20 p-4 text-left">
                 <p className="text-[10px] font-bold text-rose-400 uppercase tracking-wider mb-2">
-                  {import.meta.env.DEV ? 'Detalhes do erro (dev)' : 'Detalhes do erro'}
+                  Detalhes do erro (dev)
                 </p>
                 <pre className="text-[10px] text-rose-300/70 overflow-x-auto whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
                   {this.state.error?.message || String(this.state.error)}

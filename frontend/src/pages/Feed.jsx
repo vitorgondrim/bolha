@@ -17,7 +17,7 @@
 //   - Cada item é posicionado absolutamente via coords espaciais
 // ============================================================
 
-import { useContext, useMemo, useCallback, useRef, useEffect, useState } from 'react';
+import React, { useContext, useMemo, useCallback, useRef, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { List } from 'react-window';
@@ -224,22 +224,19 @@ const getHeatColor = (intensity) => {
 // COMPONENTE DE ITEM — renderizado pelo react-window
 // ═══════════════════════════════════════════════════════════════
 
-const BubbleItem = ({ bubble, style, user, onLike, onDislike, onSopro, onDelete, onComment, onOpen }) => {
-  // Atenção periférica do mouse: bolhas perto do cursor recebem boost
-  const [mouseAttention, setMouseAttention] = useState(0);
-
+const BubbleItem = React.memo(({ bubble, style, user, onLike, onDislike, onSopro, onDelete, onComment, onOpen }) => {
   return (
     <motion.div
       layout
       initial={{ scale: 0, opacity: 0 }}
       animate={{
-        scale: bubble._scale * (1 + mouseAttention * 0.05),
-        opacity: bubble._opacity + mouseAttention * 0.2,
+        scale: bubble._scale,
+        opacity: bubble._opacity,
         left: `${bubble._posX}%`,
         top: `${bubble._posY}%`,
         x: '-50%',
         y: '-50%',
-        filter: `blur(${bubble._depthBlur * (1 - mouseAttention * 0.5)}px)`,
+        filter: `blur(${bubble._depthBlur}px)`,
       }}
       exit={{
         scale: 0,
@@ -273,7 +270,8 @@ const BubbleItem = ({ bubble, style, user, onLike, onDislike, onSopro, onDelete,
       </motion.div>
     </motion.div>
   );
-};
+});
+BubbleItem.displayName = 'BubbleItem';
 
 // ═══════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
@@ -286,7 +284,7 @@ export default function Feed() {
   const canvasRef = useRef(null);
   const listRef = useRef(null);
   const { trails, spawnTrail } = useSoproTrails();
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const mousePosRef = useRef({ x: 0, y: 0 });
 
   const [maxVisible, setMaxVisible] = useState(MAX_BUBBLES_VISIBLE);
   const [viewportHeight, setViewportHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
@@ -302,10 +300,10 @@ export default function Feed() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Rastreia posição do mouse para efeitos de atenção periférica
+  // Rastreia posição do mouse via ref (sem re-render) — usado apenas no handleSopro
   useEffect(() => {
     const handleMouseMove = (e) => {
-      setMousePos({ x: e.clientX, y: e.clientY });
+      mousePosRef.current = { x: e.clientX, y: e.clientY };
     };
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
@@ -393,11 +391,11 @@ export default function Feed() {
         const hudEl = document.querySelector('.sopro-hud');
         if (hudEl) {
           const hudRect = hudEl.getBoundingClientRect();
-          spawnTrail(hudRect.right, hudRect.top, mousePos.x, mousePos.y);
-        }
-      } catch { toast.error('Erro ao soprar'); }
-    },
-    [soproBubble, toast, haptic, spawnTrail, mousePos]
+        spawnTrail(hudRect.right, hudRect.top, mousePosRef.current.x, mousePosRef.current.y);
+      }
+    } catch { toast.error('Erro ao soprar'); }
+  },
+  [soproBubble, toast, haptic, spawnTrail]
   );
 
   const handleDelete = useCallback(
@@ -453,8 +451,7 @@ export default function Feed() {
         </div>
 
         <div className="fixed inset-0 flex flex-wrap justify-center items-center content-center gap-5 p-8">
-          {Array.from({ length: 12 }).map((_, i) => {
-            const size = 80 + Math.random() * 120;
+          {[80, 120, 160, 100, 140, 90, 150, 110, 130, 85, 170, 95].map((size, i) => {
             return (
               <motion.div
                 key={i}

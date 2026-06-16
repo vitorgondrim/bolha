@@ -581,7 +581,7 @@ export default function BubbleDetail() {
                   <button
                     key={child._id}
                     onClick={() => navigate(`/bubble/${child._id}`)}
-                    className="w-full text-left rounded-2xl bg-gradient-to-br ${cor.from} ${cor.to} border ${cor.border} p-4 hover:bg-white/10 transition-all group"
+                    className={`w-full text-left rounded-2xl bg-gradient-to-br ${cor.from} ${cor.to} border ${cor.border} p-4 hover:bg-white/10 transition-all group`}
                   >
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${cor.bolha} flex items-center justify-center text-sm flex-shrink-0 shadow-lg`}>
