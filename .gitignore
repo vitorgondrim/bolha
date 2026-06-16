@@ -34,6 +34,7 @@ pnpm-debug.log*
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+Users/
 
 # IDE/Editor
 .vscode/
@@ -75,6 +76,8 @@ logs/
 coverage/
 .nyc_output/
 *.lcov
+test-results/
+playwright-report/
 
 # Arquivos de documentação
 docs/
@@ -82,5 +85,8 @@ docs/
 !README.md
 !DEPLOY.md
 !CHECKLIST.md
+!TESTING_GUIDE.md
+!TEST_CHECKLIST.md
 !backend/RENDER_INSTRUCTIONS.md
 !frontend/VERCEL_INSTRUCTIONS.md
+
