@@ -118,22 +118,12 @@ export const getProgressGradient = (vitalityPercent) => {
 };
 
 /**
- * Mapeia vitalidade para peso de fonte (texto dissolve com a bolha)
+ * Mapeia vitalidade para peso de fonte — texto sempre branco e legível
  */
-export const getTextStyle = (vitality) => {
-  // 🐛 FIX: Opacidade mínima do texto aumentada para garantir contraste
-  // Antes: mínimo 0.15 (quase invisível), agora mínimo 0.65
-  if (vitality < 0.3) {
-    const opacity = Math.max(0.65, vitality / 0.3);
-    const blur = (1 - vitality / 0.3) * 1;
-    return {
-      opacity,
-      filter: `blur(${blur}px)`,
-      transition: 'opacity 0.5s ease, filter 0.5s ease',
-    };
-  }
+export const getTextStyle = () => {
   return {
-    opacity: Math.max(0.85, 0.6 + vitality * 0.4),
+    color: 'white',
+    opacity: 1,
     filter: 'blur(0px)',
   };
 };

@@ -176,20 +176,13 @@ export default function useBubbleVitality(bubble, glowIntensity = 0.5, hasLeaked
   }, [glowIntensity, flicker, vitalityColor]);
 
   // ─── Propriedades de estilo do container ───
-  // 🐛 FIX: Aumentada opacidade do fundo e reduzido blur excessivo
-  // Antes: backgroundColor = rgba(8, 8, 15, 0.10 + glowIntensity * 0.15) → mínimo 0.145 (quase invisível)
-  // Antes: backdropFilter = blur(12 + glowIntensity * 20) → blur excessivo que "lavava" o conteúdo
+  // Glassmorphism escuro: fundo semi-transparente, borda sutil, sem backdrop-filter extra
   const containerStyle = useMemo(() => ({
     width: baseSize,
     height: baseSize,
     zIndex: Math.round(glowIntensity * 100),
-    // 🐛 FIX: Fundo escuro com opacidade mínima de 0.70 para contraste de texto
-    backgroundColor: `rgba(8, 8, 15, ${Math.max(0.70, 0.10 + glowIntensity * 0.15)})`,
-    // Blur reduzido pela metade: menos chance de "lavar" o conteúdo
-    backdropFilter: `blur(${Math.max(4, 6 + glowIntensity * 10)}px)`,
-    WebkitBackdropFilter: `blur(${Math.max(4, 6 + glowIntensity * 10)}px)`,
-    // Borda com opacidade mínima de 0.20 (vs 0.06 anterior)
-    borderColor: `rgba(${vitalityColor.rgb}, ${Math.max(0.20, 0.06 + glowIntensity * 0.34) * flicker})`,
+    backgroundColor: 'rgba(15, 23, 42, 0.80)',
+    border: '1px solid rgba(255, 255, 255, 0.20)',
     boxShadow,
   }), [baseSize, glowIntensity, flicker, vitalityColor, boxShadow]);
 
