@@ -125,7 +125,7 @@ export default function CreateBubblePage() {
       formData.append('content', content.trim());
 
       if (imageFile) {
-        formData.append('image', imageFile);
+        formData.append('media', imageFile); // CORREÇÃO: backend espera campo 'media', não 'image'
       }
 
       await api.post('/bubbles', formData, {

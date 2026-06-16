@@ -19,8 +19,7 @@
 
 import React, { useContext, useMemo, useCallback, useRef, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { List } from 'react-window';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AuthContext } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useBubbles, useBubbleActions } from '../hooks/useBubbles';
@@ -56,12 +55,6 @@ const MAX_DEPTH_BLUR = 6;
 
 /** Fator de escala mínimo na periferia */
 const MIN_PERIPHERY_SCALE = 0.35;
-
-/** Altura fixa de cada item no FixedSizeList (px) */
-const LIST_ITEM_SIZE = 120;
-
-/** Overscan: quantos itens acima/abaixo do viewport manter no DOM */
-const OVERSCAN_COUNT = 8;
 
 // ═══════════════════════════════════════════════════════════════
 // FUNÇÕES AUXILIARES DE HIERARQUIA VISUAL ORGÂNICA
@@ -222,13 +215,12 @@ const getHeatColor = (intensity) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// COMPONENTE DE ITEM — renderizado pelo react-window
+// COMPONENTE DE ITEM — renderizado no canvas absoluto
 // ═══════════════════════════════════════════════════════════════
 
-const BubbleItem = React.memo(({ bubble, style, user, onLike, onDislike, onSopro, onDelete, onComment, onOpen }) => {
+const BubbleItem = React.memo(({ bubble, user, onLike, onDislike, onSopro, onDelete, onComment, onOpen }) => {
   return (
     <motion.div
-      layout
       initial={{ scale: 0, opacity: 0 }}
       animate={{
         scale: bubble._scale,
@@ -246,7 +238,6 @@ const BubbleItem = React.memo(({ bubble, style, user, onLike, onDislike, onSopro
         transition: { duration: 0.6, ease: 'easeInOut' },
       }}
       transition={{
-        layout: { type: 'spring', stiffness: 60, damping: 15 },
         scale: { duration: 1.0, ease: [0.34, 1.56, 0.64, 1] },
         opacity: { duration: 0.8 },
         left: { duration: 1.2, ease: 'easeOut' },
@@ -254,7 +245,7 @@ const BubbleItem = React.memo(({ bubble, style, user, onLike, onDislike, onSopro
         filter: { duration: 0.6, ease: 'easeOut' },
       }}
       className="absolute will-change-transform"
-      style={{ zIndex: bubble._zIndex, ...style }}
+      style={{ zIndex: bubble._zIndex }}
     >
       <motion.div className="relative">
         <OrganicBubble
@@ -283,17 +274,14 @@ export default function Feed() {
   const toast = useToast();
   const haptic = useHapticFeedback();
   const canvasRef = useRef(null);
-  const listRef = useRef(null);
   const { trails, spawnTrail } = useSoproTrails();
   const mousePosRef = useRef({ x: 0, y: 0 });
 
   const [maxVisible, setMaxVisible] = useState(MAX_BUBBLES_VISIBLE);
-  const [viewportHeight, setViewportHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
 
-  // Atualiza viewportHeight e densidade máxima no resize
+  // Atualiza densidade máxima no resize
   useEffect(() => {
     const handleResize = () => {
-      setViewportHeight(window.innerHeight);
       setMaxVisible(getMaxByViewport());
     };
     handleResize(); // calcula no mount também
@@ -422,16 +410,15 @@ export default function Feed() {
   );
 
   // ═══════════════════════════════════════════════════════════════
-  // RENDER — ITEM DO REACT-WINDOW (wrapper com props do contexto)
+  // RENDER — ITEM DO CANVAS ABSOLUTO (sem react-window)
   // ═══════════════════════════════════════════════════════════════
-  const Row = useCallback(({ index, style }) => {
-    const bubble = visibleBubbles[index];
+  const renderBubble = useCallback((bubble) => {
     if (!bubble) return null;
 
     return (
       <BubbleItem
+        key={bubble._id}
         bubble={bubble}
-        style={style}
         user={user}
         onLike={handleLike}
         onDislike={handleDislike}
@@ -441,7 +428,7 @@ export default function Feed() {
         onOpen={handleOpen}
       />
     );
-  }, [visibleBubbles, user, handleLike, handleDislike, handleSopro, handleDelete, handleComment, handleOpen]);
+  }, [user, handleLike, handleDislike, handleSopro, handleDelete, handleComment, handleOpen]);
 
   // ═══════════════════════════════════════════════════════════════
   // ESTADOS DE CARREGAMENTO
@@ -555,7 +542,7 @@ export default function Feed() {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // RENDER — CANVAS ESPACIAL COM REACT-WINDOW (FIXEDSIZELIST)
+  // RENDER — CANVAS ESPACIAL (POSICIONAMENTO ABSOLUTO)
   // ═══════════════════════════════════════════════════════════════
   return (
     <BubbleHUD>
@@ -567,7 +554,7 @@ export default function Feed() {
         <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-[#f59e0b]/2 rounded-full blur-[150px] animate-nebula-pulse" style={{ animationDuration: '18s', animationDelay: '6s' }} />
       </div>
 
-      {/* ─── CAMPO DE CONSTELAÇÃO (REACT-WINDOW) ─── */}
+      {/* ─── CAMPO DE CONSTELAÇÃO ─── */}
       <div
         ref={canvasRef}
         className="relative z-10 w-screen h-screen overflow-hidden"
@@ -579,19 +566,10 @@ export default function Feed() {
         {/* ─── SOPRO TRAIL — partículas de ar viajando do HUD até a bolha ─── */}
         <SoproTrailRenderer trails={trails} />
 
-        <List
-          ref={listRef}
-          height={viewportHeight}
-          width="100%"
-          itemCount={visibleBubbles.length}
-          itemSize={LIST_ITEM_SIZE}
-          overscanCount={OVERSCAN_COUNT}
-          style={{ overflow: 'visible' }}
-          className="absolute inset-0"
-          rowProps={{}}
-        >
-          {Row}
-        </List>
+        {/* ─── BOLHAS — renderizadas com posicionamento absoluto ─── */}
+        <AnimatePresence mode="popLayout">
+          {visibleBubbles.map((bubble) => renderBubble(bubble))}
+        </AnimatePresence>
 
         {/* ─── INDICADOR DE DENSIDADE (visível só quando > MAX) ─── */}
         {densityInfo.hidden > 0 && (
