@@ -29,23 +29,8 @@ import OrganicBubble from '../components/bubbles/OrganicBubble';
 import { ConnectionLines, useSoproTrails, SoproTrailRenderer } from '../components/effects/SoproRippleEffect';
 
 // ═══════════════════════════════════════════════════════════════
-// CONSTANTES DE DENSIDADE
+// CONSTANTES DE POSICIONAMENTO
 // ═══════════════════════════════════════════════════════════════
-
-/** Número máximo de bolhas visíveis no canvas antes de podar */
-const MAX_BUBBLES_VISIBLE = 80;
-
-/** Calcula capacidade máxima baseada no viewport */
-const getMaxByViewport = () => {
-  if (typeof window === 'undefined') return MAX_BUBBLES_VISIBLE;
-  const width = window.innerWidth;
-  const height = window.innerHeight;
-  const viewportArea = width * height;
-  // Cada bolha ocupa ~120x120px, densidade máxima de 15% da tela
-  const bubbleArea = 120 * 120;
-  const maxDensity = 0.15;
-  return Math.min(MAX_BUBBLES_VISIBLE, Math.floor((viewportArea * maxDensity) / bubbleArea));
-};
 
 /** Distância mínima entre centros de bolha (fração do raio viewport) */
 const COLLISION_PADDING_FACTOR = 0.022;
@@ -125,9 +110,11 @@ const resolveCollisions = (bubbles) => {
 
 /**
  * Computa propriedades espaciais — GRAVIDADE + COLISÃO + PROFUNDIDADE
- * @param {Object} user - Usuário logado (para sempre mostrar as próprias bolhas)
+ * TODAS as bolhas são sempre visíveis no feed (sem ocultação por heat).
+ * Apenas bolhas-mãe (parentBubble !== null) são filtradas pois ficam
+ * dentro da bolha mãe.
  */
-const computeSpatialProps = (allBubbles, heats, maxBubbles, userId) => {
+const computeSpatialProps = (allBubbles, heats) => {
   if (!allBubbles?.length) return [];
   const maxHeat = Math.max(...heats, 1);
 
@@ -180,29 +167,15 @@ const computeSpatialProps = (allBubbles, heats, maxBubbles, userId) => {
 
   const resolvedPositions = resolveCollisions(rawProps);
 
-  let visibleCount = resolvedPositions.length;
-  let hiddenThreshold = -1;
-
-  if (resolvedPositions.length > maxBubbles) {
-    const sortedByHeat = [...resolvedPositions].sort((a, b) => b._heat - a._heat);
-    hiddenThreshold = sortedByHeat[maxBubbles - 1]._heat;
-    visibleCount = maxBubbles;
-  }
-
   return resolvedPositions.map((item) => {
     const posX = 50 + item.x;
     const posY = 45 + item.y;
-    // Sempre mostra bolhas do próprio usuário mesmo se abaixo do threshold
-    const ownBubble = userId && item.authorId === userId;
-    const visible = ownBubble || hiddenThreshold < 0 || item._heat >= hiddenThreshold;
 
     return {
       ...item,
       _posX: posX,
       _posY: posY,
-      _visible: visible,
-      _hiddenThreshold: hiddenThreshold,
-      _totalVisible: visibleCount,
+      _visible: true, // TODAS as bolhas são visíveis
       _totalBubbles: resolvedPositions.length,
     };
   });
@@ -281,18 +254,6 @@ export default function Feed() {
   const { trails, spawnTrail } = useSoproTrails();
   const mousePosRef = useRef({ x: 0, y: 0 });
 
-  const [maxVisible, setMaxVisible] = useState(MAX_BUBBLES_VISIBLE);
-
-  // Atualiza densidade máxima no resize
-  useEffect(() => {
-    const handleResize = () => {
-      setMaxVisible(getMaxByViewport());
-    };
-    handleResize(); // calcula no mount também
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
   // Rastreia posição do mouse via ref (sem re-render) — usado apenas no handleSopro
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -326,29 +287,20 @@ export default function Feed() {
   }, []);
 
   // ═══════════════════════════════════════════════════════════════
-  // ENRIQUECE BOLHAS COM GESTÃO DE DENSIDADE
+  // ENRIQUECE BOLHAS COM PROPRIEDADES ESPACIAIS
   // ═══════════════════════════════════════════════════════════════
-  const { visibleBubbles, hiddenCount, densityInfo } = useMemo(() => {
+  const { spacedBubbles, totalCount } = useMemo(() => {
     if (!bubbles?.length) {
-      return { visibleBubbles: [], hiddenCount: 0, densityInfo: { total: 0, visible: 0, hidden: 0, threshold: 0 } };
+      return { spacedBubbles: [], totalCount: 0 };
     }
     const heats = bubbles.map((b) => getBubbleHeat(b));
-    const enriched = computeSpatialProps(bubbles, heats, maxVisible, user?._id);
-
-    const visible = enriched.filter((b) => b._visible);
-    const hidden = enriched.length - visible.length;
+    const enriched = computeSpatialProps(bubbles, heats);
 
     return {
-      visibleBubbles: visible,
-      hiddenCount: hidden,
-      densityInfo: {
-        total: enriched.length,
-        visible: visible.length,
-        hidden: hidden,
-        threshold: visible.length > 0 ? visible[visible.length - 1]._heat : 0,
-      },
+      spacedBubbles: enriched,
+      totalCount: enriched.length,
     };
-  }, [bubbles, maxVisible]);
+  }, [bubbles]);
 
   // ═══════════════════════════════════════════════════════════════
   // HANDLERS MEMOIZADOS
@@ -565,18 +517,18 @@ export default function Feed() {
         style={{ perspective: '1200px' }}
       >
         {/* ─── CONEXÕES NEURAIS (SVG) — fios entre bolhas que o usuário interagiu ─── */}
-        <ConnectionLines bubbles={visibleBubbles} userId={user?._id} />
+        <ConnectionLines bubbles={spacedBubbles} userId={user?._id} />
 
         {/* ─── SOPRO TRAIL — partículas de ar viajando do HUD até a bolha ─── */}
         <SoproTrailRenderer trails={trails} />
 
         {/* ─── BOLHAS — renderizadas com posicionamento absoluto ─── */}
         <AnimatePresence mode="popLayout">
-          {visibleBubbles.map((bubble) => renderBubble(bubble))}
+          {spacedBubbles.map((bubble) => renderBubble(bubble))}
         </AnimatePresence>
 
-        {/* ─── INDICADOR DE DENSIDADE (visível só quando > MAX) ─── */}
-        {densityInfo.hidden > 0 && (
+        {/* ─── CONTADOR SIMPLES DE BOLHAS NO ÉTER ─── */}
+        {totalCount > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -588,8 +540,7 @@ export default function Feed() {
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
               </span>
               <span className="text-[10px] font-mono text-slate-400 tracking-tight">
-                {densityInfo.total} bolhas · mostrando {densityInfo.visible} · 
-                <span className="text-slate-500"> {densityInfo.hidden} ocultas por densidade</span>
+                🫧 {totalCount} bolhas no éter
               </span>
             </div>
           </motion.div>
