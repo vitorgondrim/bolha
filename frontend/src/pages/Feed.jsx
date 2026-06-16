@@ -19,7 +19,7 @@
 
 import { useContext, useMemo, useCallback, useRef, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { List } from 'react-window';
 import { AuthContext } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -578,20 +578,18 @@ export default function Feed() {
         {/* ─── SOPRO TRAIL — partículas de ar viajando do HUD até a bolha ─── */}
         <SoproTrailRenderer trails={trails} />
 
-        <AnimatePresence mode="popLayout">
-          <List
-            ref={listRef}
-            height={viewportHeight}
-            width="100%"
-            itemCount={visibleBubbles.length}
-            itemSize={LIST_ITEM_SIZE}
-            overscanCount={OVERSCAN_COUNT}
-            style={{ overflow: 'visible' }}
-            className="absolute inset-0"
-          >
-            {Row}
-          </List>
-        </AnimatePresence>
+        <List
+          ref={listRef}
+          height={viewportHeight}
+          width="100%"
+          itemCount={visibleBubbles.length}
+          itemSize={LIST_ITEM_SIZE}
+          overscanCount={OVERSCAN_COUNT}
+          style={{ overflow: 'visible' }}
+          className="absolute inset-0"
+        >
+          {Row}
+        </List>
 
         {/* ─── INDICADOR DE DENSIDADE (visível só quando > MAX) ─── */}
         {densityInfo.hidden > 0 && (

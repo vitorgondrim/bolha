@@ -1,6 +1,6 @@
 # 🔍 FRONTEND AUDIT REPORT — BOLHA
 
-> Data: 2026-06-15
+> Data: 2026-06-16 (atualizado)
 > Versão do código analisado: main (último commit)
 > Total de arquivos analisados: 38
 
@@ -434,6 +434,39 @@ ls ../shared/schemas/bubbleSchema.js  # deve existir
 | Total de utilitários | 2 |
 | Linhas de código (estimado) | ~4.500 |
 | Dependências | 14 (produção) + 9 (dev) |
+
+---
+
+## 🔥 CORREÇÃO ADICIONAL (2026-06-16) — Bug "Algo explodiu!" no Feed
+
+**Bug reportado:** Tela "Algo explodiu!" (ErrorBoundary) ao acessar o Feed, com botões
+"Tentar novamente" e "Ir para o feed" não funcionais.
+
+**Causa raiz identificada:** `AnimatePresence mode="popLayout"` wrapping `react-window`'s
+`List` component. O `AnimatePresence` com `mode="popLayout"` tenta gerenciar layout
+transitions dos filhos, mas o `List` do react-window gerencia seu próprio DOM internamente
+(virtualização). Essa incompatibilidade causava um erro de renderização capturado pelo
+ErrorBoundary.
+
+**Arquivos modificados:**
+- `src/pages/Feed.jsx` — Removido `AnimatePresence` do wrapping do `List` e import não utilizado
+- `src/components/ErrorBoundary.jsx` — Botões agora usam `window.location.reload()` e
+  `window.location.href` para reload completo (limpa estado do React Query). Detalhes do
+  erro agora aparecem em produção para debug.
+
+**Antes:**
+```jsx
+<AnimatePresence mode="popLayout">
+  <List ref={listRef} ...>{Row}</List>
+</AnimatePresence>
+```
+
+**Depois:**
+```jsx
+<List ref={listRef} ...>{Row}</List>
+```
+
+**Validação:** Build passou com sucesso (vite build, 624ms, 586 modules).
 
 ---
 
