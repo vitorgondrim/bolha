@@ -121,9 +121,11 @@ export const getProgressGradient = (vitalityPercent) => {
  * Mapeia vitalidade para peso de fonte (texto dissolve com a bolha)
  */
 export const getTextStyle = (vitality) => {
+  // 🐛 FIX: Opacidade mínima do texto aumentada para garantir contraste
+  // Antes: mínimo 0.15 (quase invisível), agora mínimo 0.65
   if (vitality < 0.3) {
-    const opacity = Math.max(0.15, vitality / 0.3);
-    const blur = (1 - vitality / 0.3) * 2;
+    const opacity = Math.max(0.65, vitality / 0.3);
+    const blur = (1 - vitality / 0.3) * 1;
     return {
       opacity,
       filter: `blur(${blur}px)`,
@@ -131,7 +133,7 @@ export const getTextStyle = (vitality) => {
     };
   }
   return {
-    opacity: 0.6 + vitality * 0.4,
+    opacity: Math.max(0.85, 0.6 + vitality * 0.4),
     filter: 'blur(0px)',
   };
 };

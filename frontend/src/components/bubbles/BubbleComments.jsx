@@ -43,7 +43,7 @@ export default function BubbleComments({ bubble, showComments, showCommentForm, 
           {latestComments.map((comment) => (
             <div key={comment._id} className="rounded-xl bg-slate-900/60 p-2.5 border border-slate-800/80">
               <div
-                className="text-[10px] font-semibold text-cyan-400/80 mb-0.5 cursor-pointer hover:text-cyan-300 transition-colors"
+                className="text-[10px] font-semibold text-cyan-400 mb-0.5 cursor-pointer hover:text-cyan-300 transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
                   if (comment.author?.username) navigate(`/profile/${comment.author.username}`);

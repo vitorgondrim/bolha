@@ -183,8 +183,8 @@ export default function useBubbleVitality(bubble, glowIntensity = 0.5, hasLeaked
     width: baseSize,
     height: baseSize,
     zIndex: Math.round(glowIntensity * 100),
-    // Fundo escuro com opacidade mínima de 0.35 (vs 0.145 anterior)
-    backgroundColor: `rgba(8, 8, 15, ${Math.max(0.35, 0.10 + glowIntensity * 0.15)})`,
+    // 🐛 FIX: Fundo escuro com opacidade mínima de 0.70 para contraste de texto
+    backgroundColor: `rgba(8, 8, 15, ${Math.max(0.70, 0.10 + glowIntensity * 0.15)})`,
     // Blur reduzido pela metade: menos chance de "lavar" o conteúdo
     backdropFilter: `blur(${Math.max(4, 6 + glowIntensity * 10)}px)`,
     WebkitBackdropFilter: `blur(${Math.max(4, 6 + glowIntensity * 10)}px)`,

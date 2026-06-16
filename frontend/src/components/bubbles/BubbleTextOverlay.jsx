@@ -29,21 +29,21 @@ const BubbleTextOverlay = memo(function BubbleTextOverlay({
       style={textStyle}
     >
       {/* ─── AUTOR (mini, topo) ─── */}
-      <span className="text-[9px] font-bold text-cyan-300/60 leading-none mb-0.5 truncate max-w-[85%]">
+      <span className="text-[9px] font-bold text-cyan-300 leading-none mb-0.5 truncate max-w-[85%]">
         @{displayName}
       </span>
 
       {/* ─── CONTEÚDO (central, truncado) ─── */}
-      <p className="text-xs text-slate-100/90 leading-tight line-clamp-4 text-center break-words overflow-hidden">
+      <p className="text-xs text-slate-100 leading-tight line-clamp-4 text-center break-words overflow-hidden">
         {contentText}
       </p>
 
       {/* ─── MÉTRICAS (base) ─── */}
       <div className="flex items-center gap-2 mt-1">
-        <span className="text-[8px] text-cyan-400/50 font-medium select-none">
+        <span className="text-[8px] text-cyan-400 font-medium select-none">
           ❤️{likesCount}
         </span>
-        <span className="text-[8px] text-lime-400/50 font-medium select-none">
+        <span className="text-[8px] text-lime-400 font-medium select-none">
           🫧{soprosCount}
         </span>
       </div>
