@@ -140,9 +140,9 @@ const computeSpatialProps = (allBubbles, heats) => {
     // Blur máximo reduzido para bolhas periféricas
     const depthBlur = Math.pow(distFromCenter, 1.8) * 3;
 
-    const distanceOpacity = 1.0 - Math.pow(distFromCenter, 1.5) * 0.4;
-    // Opacidade minima de 0.60 para nunca ficar invisível
-    const opacity = Math.max(0.60, (0.40 + normalized * 0.60) * distanceOpacity);
+    const distanceOpacity = 1.0 - Math.pow(distFromCenter, 1.5) * 0.25;
+    // 🐛 FIX: Opacidade minima de 0.75 para nunca ficar invisível (antes era 0.60)
+    const opacity = Math.max(0.75, (0.50 + normalized * 0.50) * distanceOpacity);
 
     const depthScale = 1.0 - Math.pow(distFromCenter, 2) * 0.3;
     const finalScale = Math.max(0.55, scale * depthScale);

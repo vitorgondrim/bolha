@@ -134,11 +134,13 @@ export default function useBubbleVitality(bubble, glowIntensity = 0.5, hasLeaked
   const textStyle = useMemo(() => getTextStyle(glowIntensity), [glowIntensity]);
 
   // ─── Opacidade da bolha ───
+  // 🐛 FIX: Garante opacidade mínima de 0.75 para bolhas novas
+  // Antes: Math.min(1, 0.4 + glowIntensity * 0.7) → resultava em 0.61 para glowIntensity=0.3
   const bubbleOpacity = useMemo(() => {
     if (phase === 'dying') {
       return 0.3 + Math.sin(time * 4 + seed * 7) * 0.2;
     }
-    return Math.min(1, 0.4 + glowIntensity * 0.7);
+    return Math.min(1, Math.max(0.75, 0.4 + glowIntensity * 0.7));
   }, [phase, time, seed, glowIntensity]);
 
   // ─── Tamanho base — varia organicamente por seed ───
@@ -174,14 +176,20 @@ export default function useBubbleVitality(bubble, glowIntensity = 0.5, hasLeaked
   }, [glowIntensity, flicker, vitalityColor]);
 
   // ─── Propriedades de estilo do container ───
+  // 🐛 FIX: Aumentada opacidade do fundo e reduzido blur excessivo
+  // Antes: backgroundColor = rgba(8, 8, 15, 0.10 + glowIntensity * 0.15) → mínimo 0.145 (quase invisível)
+  // Antes: backdropFilter = blur(12 + glowIntensity * 20) → blur excessivo que "lavava" o conteúdo
   const containerStyle = useMemo(() => ({
     width: baseSize,
     height: baseSize,
     zIndex: Math.round(glowIntensity * 100),
-    backgroundColor: `rgba(8, 8, 15, ${0.10 + glowIntensity * 0.15})`,
-    backdropFilter: `blur(${12 + glowIntensity * 20}px)`,
-    WebkitBackdropFilter: `blur(${12 + glowIntensity * 20}px)`,
-    borderColor: `rgba(${vitalityColor.rgb}, ${(0.06 + glowIntensity * 0.34) * flicker})`,
+    // Fundo escuro com opacidade mínima de 0.35 (vs 0.145 anterior)
+    backgroundColor: `rgba(8, 8, 15, ${Math.max(0.35, 0.10 + glowIntensity * 0.15)})`,
+    // Blur reduzido pela metade: menos chance de "lavar" o conteúdo
+    backdropFilter: `blur(${Math.max(4, 6 + glowIntensity * 10)}px)`,
+    WebkitBackdropFilter: `blur(${Math.max(4, 6 + glowIntensity * 10)}px)`,
+    // Borda com opacidade mínima de 0.20 (vs 0.06 anterior)
+    borderColor: `rgba(${vitalityColor.rgb}, ${Math.max(0.20, 0.06 + glowIntensity * 0.34) * flicker})`,
     boxShadow,
   }), [baseSize, glowIntensity, flicker, vitalityColor, boxShadow]);
 
