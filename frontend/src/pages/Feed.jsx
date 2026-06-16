@@ -391,11 +391,11 @@ export default function Feed() {
         const hudEl = document.querySelector('.sopro-hud');
         if (hudEl) {
           const hudRect = hudEl.getBoundingClientRect();
-        spawnTrail(hudRect.right, hudRect.top, mousePosRef.current.x, mousePosRef.current.y);
-      }
-    } catch { toast.error('Erro ao soprar'); }
-  },
-  [soproBubble, toast, haptic, spawnTrail]
+          spawnTrail(hudRect.right, hudRect.top, mousePosRef.current.x, mousePosRef.current.y);
+        }
+      } catch { toast.error('Erro ao soprar'); }
+    },
+    [soproBubble, toast, haptic, spawnTrail]
   );
 
   const handleDelete = useCallback(
