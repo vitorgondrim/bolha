@@ -117,18 +117,21 @@ export function useBubbleActions() {
     queryClient.invalidateQueries({ queryKey: ['bubbles'] });
   };
 
+  // CORREÇÃO: Rotas corrigidas para corresponder ao backend.
+  // Backend espera: PATCH /bubbles/:id/like e PATCH /bubbles/:id/dislike
+  // (não POST /bubbles/:id/react com type)
   const likeMutation = useMutation({
-    mutationFn: ({ bubbleId }) => api.post(`/bubbles/${bubbleId}/react`, { type: 'like' }),
+    mutationFn: ({ bubbleId }) => api.patch(`/bubbles/${bubbleId}/like`),
     onSettled,
   });
 
   const dislikeMutation = useMutation({
-    mutationFn: ({ bubbleId }) => api.post(`/bubbles/${bubbleId}/react`, { type: 'dislike' }),
+    mutationFn: ({ bubbleId }) => api.patch(`/bubbles/${bubbleId}/dislike`),
     onSettled,
   });
 
   const soproMutation = useMutation({
-    mutationFn: ({ bubbleId }) => api.post(`/bubbles/${bubbleId}/react`, { type: 'sopro' }),
+    mutationFn: ({ bubbleId }) => api.post(`/bubbles/${bubbleId}/sopro`),
     onSettled,
   });
 

@@ -508,8 +508,8 @@ export default function BubbleDetail() {
                 <span className="text-[9px] font-bold text-purple-400/50 uppercase tracking-wider">💬 Fios</span>
                 <div className="h-px flex-1 bg-gradient-to-r from-purple-400/10 to-transparent" />
               </div>
-              {bolha.comments.map((c, i) => (
-                <div key={i} className="flex items-start gap-3 bg-white/5 rounded-2xl p-3 border border-white/5">
+              {bolha.comments.map((c) => (
+                <div key={c._id || c.createdAt} className="flex items-start gap-3 bg-white/5 rounded-2xl p-3 border border-white/5">
                   <div className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500/30 to-lime-500/30 flex items-center justify-center text-[8px] font-bold text-white/60 flex-shrink-0">
                     {(c.username || c.author?.username || "A").charAt(0).toUpperCase()}
                   </div>

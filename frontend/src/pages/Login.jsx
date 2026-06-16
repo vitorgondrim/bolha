@@ -33,9 +33,24 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const toast = useToast();
 
-  const handleSubmit = async (e) => {
+    const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Validação frontend antes de enviar ao backend
+    if (isRegister && username.trim().length < 3) {
+      setError('Usuário deve ter pelo menos 3 caracteres');
+      return;
+    }
+    if (!email.includes('@')) {
+      setError('Informe um e-mail válido');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+
     setLoading(true);
 
     const result = isRegister

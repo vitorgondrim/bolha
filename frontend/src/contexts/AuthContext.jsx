@@ -32,12 +32,14 @@ export function AuthProvider({ children }) {
     onDisconnect: null,
   });
 
-  // Helper para padronizar o objeto usuário
+    // Helper para padronizar o objeto usuário
+  // SEGURANÇA: email NÃO é armazenado no localStorage para evitar exposição
+  // em caso de ataque XSS. O email só é trafegado via cookies httpOnly.
   const formatUser = (fullUser) => ({
     id: fullUser._id,
     _id: fullUser._id,
     username: fullUser.username,
-    email: fullUser.email,
+    // email removido do localStorage por segurança
     avatarUrl: fullUser.avatarUrl,
     coverUrl: fullUser.coverUrl,
     bio: fullUser.bio,
